@@ -61,7 +61,7 @@ def test_manifest_write_hashes_files_and_keeps_unknown(tmp_path) -> None:  # typ
     frame = pd.read_parquet(output)
     assert audit.manifest_hash is not None
     assert frame.loc[0, "label_status"] == "UNKNOWN"
-    assert len(frame.loc[0, "sha256"]) == 64
+    assert len(str(frame.loc[0, "sha256"])) == 64
 
 
 def test_write_requires_explicit_license_confirmation(tmp_path) -> None:  # type: ignore[no-untyped-def]
