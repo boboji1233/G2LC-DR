@@ -21,8 +21,9 @@ from g2lc.guidelines.ast import (
     Or,
 )
 from g2lc.guidelines.trivalued import TriValue, tri_and, tri_or
+from g2lc.ontology.feasibility import feasible_completions
 from g2lc.ontology.models import EvidenceOntology
-from g2lc.types import EvidenceState, StrictModel
+from g2lc.types import EvidenceState, StrictModel, scalar_equal
 from g2lc.utils.io import canonical_json
 
 
@@ -45,6 +46,24 @@ class GuidelineEvaluation(StrictModel):
     unsupported_predicates: list[str] = Field(default_factory=list)
 
 
+def validate_evidence_state(state: EvidenceState, ontology: EvidenceOntology) -> None:
+    """Reject unknown keys and values outside their exact typed finite domains."""
+
+    predicates = ontology.predicate_map()
+    unknown = sorted(set(state.values) - predicates.keys())
+    if unknown:
+        raise GuidelineValidationError(f"state has unknown predicate keys: {unknown}")
+    for predicate_id, value in state.values.items():
+        if value is None:
+            continue
+        predicate = predicates[predicate_id]
+        if not any(scalar_equal(value, allowed) for allowed in predicate.allowed_values):
+            raise GuidelineValidationError(
+                f"predicate {predicate_id!r} has invalid typed state value {value!r}; "
+                f"allowed={predicate.allowed_values!r}"
+            )
+
+
 def evaluate_expression(
     expression: Expression,
     state: EvidenceState,
@@ -52,12 +71,23 @@ def evaluate_expression(
 ) -> TriValue:
     """Evaluate one expression without converting unknown evidence to false."""
 
+    validate_evidence_state(state, ontology)
+    return _evaluate_expression(expression, state, ontology)
+
+
+def _evaluate_expression(
+    expression: Expression,
+    state: EvidenceState,
+    ontology: EvidenceOntology,
+) -> TriValue:
+    """Internal expression evaluator for an already validated state."""
+
     predicates = ontology.predicate_map()
     if isinstance(expression, (And, Or)):
-        values = [evaluate_expression(term, state, ontology) for term in expression.terms]
+        values = [_evaluate_expression(term, state, ontology) for term in expression.terms]
         return tri_and(values) if isinstance(expression, And) else tri_or(values)
     if isinstance(expression, Not):
-        return ~evaluate_expression(expression.term, state, ontology)
+        return ~_evaluate_expression(expression.term, state, ontology)
     if expression.predicate not in predicates:
         raise OutOfSpecificationError(
             f"predicate {expression.predicate!r} is not declared in ontology "
@@ -69,9 +99,13 @@ def evaluate_expression(
     if value is None:
         return TriValue.UNKNOWN
     if isinstance(expression, Equals):
-        return TriValue.TRUE if value == expression.value else TriValue.FALSE
+        return TriValue.TRUE if scalar_equal(value, expression.value) else TriValue.FALSE
     if isinstance(expression, InSet):
-        return TriValue.TRUE if value in expression.values else TriValue.FALSE
+        return (
+            TriValue.TRUE
+            if any(scalar_equal(value, candidate) for candidate in expression.values)
+            else TriValue.FALSE
+        )
     if isinstance(expression, (GreaterEqual, LessEqual)):
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise GuidelineValidationError(
@@ -92,13 +126,14 @@ def evaluate_guideline(
 
     results: list[tuple[int, str, ClinicalAction, TriValue]] = []
     try:
+        validate_evidence_state(state, ontology)
         for rule in guideline.rules:
             results.append(
                 (
                     rule.priority,
                     rule.id,
                     rule.action,
-                    evaluate_expression(rule.when, state, ontology),
+                    _evaluate_expression(rule.when, state, ontology),
                 )
             )
     except OutOfSpecificationError as exc:
@@ -109,40 +144,73 @@ def evaluate_guideline(
             unsupported_predicates=[predicate],
         )
 
-    true_rules = [item for item in results if item[3] is TriValue.TRUE]
-    if true_rules:
-        highest = max(item[0] for item in true_rules)
-        winners = sorted(
-            (item for item in true_rules if item[0] == highest), key=lambda item: item[1]
-        )
-        actions_by_key = {
-            canonical_json(item[2].model_dump(mode="json")): item[2] for item in winners
-        }
-        actions = [actions_by_key[key] for key in sorted(actions_by_key)]
-        return GuidelineEvaluation(
-            status=(
-                EvaluationStatus.UNIQUE_ACTION if len(actions) == 1 else EvaluationStatus.ACTION_SET
-            ),
-            actions=actions,
-            matched_clauses=[item[1] for item in winners],
-            unknown_clauses=sorted(item[1] for item in results if item[3] is TriValue.UNKNOWN),
-        )
+    missing = [item.id for item in ontology.predicates if not state.known(item.id)]
+    action_by_key: dict[str, ClinicalAction] = {}
+    matched: set[str] = set()
+    if missing:
+        for complete in feasible_completions(state, ontology):
+            actions, winner_ids = _evaluate_complete(guideline, complete, ontology)
+            matched.update(winner_ids)
+            for action in actions:
+                action_by_key[canonical_json(action.model_dump(mode="json"))] = action
+    else:
+        actions, winner_ids = _evaluate_complete(guideline, state, ontology)
+        matched.update(winner_ids)
+        for action in actions:
+            action_by_key[canonical_json(action.model_dump(mode="json"))] = action
 
+    actions = [action_by_key[key] for key in sorted(action_by_key)]
     unknown = sorted(item[1] for item in results if item[3] is TriValue.UNKNOWN)
-    if unknown:
-        return GuidelineEvaluation(
-            status=EvaluationStatus.INSUFFICIENT_EVIDENCE,
-            unknown_clauses=unknown,
-        )
-    if guideline.default_action is not None:
-        return GuidelineEvaluation(
-            status=EvaluationStatus.UNIQUE_ACTION,
-            actions=[guideline.default_action],
-        )
-    return GuidelineEvaluation(status=EvaluationStatus.INSUFFICIENT_EVIDENCE)
+    status = EvaluationStatus.INSUFFICIENT_EVIDENCE
+    if len(actions) == 1:
+        status = EvaluationStatus.UNIQUE_ACTION
+    elif len(actions) > 1:
+        status = EvaluationStatus.ACTION_SET
+    return GuidelineEvaluation(
+        status=status,
+        actions=actions,
+        matched_clauses=sorted(matched),
+        unknown_clauses=unknown,
+    )
+
+
+def _evaluate_complete(
+    guideline: Guideline,
+    state: EvidenceState,
+    ontology: EvidenceOntology,
+) -> tuple[list[ClinicalAction], list[str]]:
+    """Evaluate a state complete for every predicate referenced by a guideline."""
+
+    true_rules = [
+        rule
+        for rule in guideline.rules
+        if _evaluate_expression(rule.when, state, ontology) is TriValue.TRUE
+    ]
+    if not true_rules:
+        return ([guideline.default_action] if guideline.default_action is not None else []), []
+    highest = max(rule.priority for rule in true_rules)
+    winners = sorted((rule for rule in true_rules if rule.priority == highest), key=lambda x: x.id)
+    by_key = {canonical_json(rule.action.model_dump(mode="json")): rule.action for rule in winners}
+    return [by_key[key] for key in sorted(by_key)], [rule.id for rule in winners]
+
+
+def decision_signature(evaluation: GuidelineEvaluation) -> str:
+    """Canonicalize only the normalized possible action set."""
+
+    actions = sorted(
+        (item.model_dump(mode="json") for item in evaluation.actions),
+        key=canonical_json,
+    )
+    return canonical_json(actions)
+
+
+def trace_signature(evaluation: GuidelineEvaluation) -> str:
+    """Canonicalize the full result for audit only, never pair generation."""
+
+    return canonical_json(evaluation.model_dump(mode="json"))
 
 
 def action_signature(evaluation: GuidelineEvaluation) -> str:
-    """Canonicalize a full evaluation outcome for state-pair comparison."""
+    """Backward-compatible name for the action-only decision signature."""
 
-    return canonical_json(evaluation.model_dump(mode="json"))
+    return decision_signature(evaluation)
