@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import Field
@@ -61,13 +62,13 @@ class CompilerSolution(StrictModel):
     solver_status: SolverStatus
     selected_operators: list[str] = Field(default_factory=list)
     derived_predicates: list[str] = Field(default_factory=list)
-    total_cost: float = Field(default=0, ge=0)
+    total_cost: Decimal = Field(default=Decimal(0), ge=0)
     optimal: bool = False
     separated_pair_count: int = Field(default=0, ge=0)
-    required_pair_count: int = Field(default=0, ge=0)
+    required_pair_count: int | None = Field(default=0, ge=0)
     iterations: int = Field(default=0, ge=0)
     counterexamples: list[Counterexample] = Field(default_factory=list)
     missing_predicates: list[str] = Field(default_factory=list)
     minimal_additions: list[str] = Field(default_factory=list)
-    minimum_repair_cost: float | None = Field(default=None, ge=0)
+    minimum_repair_cost: Decimal | None = Field(default=None, ge=0)
     out_of_spec: list[OutOfSpecFinding] = Field(default_factory=list)

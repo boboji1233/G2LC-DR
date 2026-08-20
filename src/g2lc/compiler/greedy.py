@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from g2lc.compiler.dominance import dominated_operators
 from g2lc.compiler.exact import _counterexample
 from g2lc.compiler.problem import FiniteProblem
@@ -42,13 +44,13 @@ def solve_greedy(finite: FiniteProblem) -> CompilerSolution:
     iterations = 0
     while covered != universe:
         remaining = universe - covered
-        scored: list[tuple[float, int, str]] = []
+        scored: list[tuple[Decimal, int, str]] = []
         for operator in candidates:
             benefit = len(finite.coverage[operator.id] & remaining)
             if benefit == 0:
                 continue
             cost = weighted_cost(operator, finite.loaded.config.instability_weight)
-            ratio = float("inf") if cost == 0 else benefit / cost
+            ratio = Decimal("Infinity") if cost == 0 else Decimal(benefit) / cost
             scored.append((ratio, benefit, operator.id))
         if not scored:
             unresolved = sorted(universe - covered)

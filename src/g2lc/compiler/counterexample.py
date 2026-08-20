@@ -5,7 +5,7 @@ from __future__ import annotations
 import z3
 from ortools.sat.python import cp_model
 
-from g2lc.compiler.exact import _units
+from g2lc.compiler.exact import solve_lexicographic_model
 from g2lc.compiler.problem import LoadedCompilerProblem
 from g2lc.compiler.result import (
     CompilerSolution,
@@ -27,6 +27,16 @@ from g2lc.guidelines.ast import (
     Or,
 )
 from g2lc.guidelines.evaluator import action_signature, evaluate_guideline
+from g2lc.ontology.models import (
+    AtMostOneConstraint,
+    ConditionalAllowedConstraint,
+    DerivedEqualityConstraint,
+    EvidenceCondition,
+    ExactlyOneConstraint,
+    ImplicationConstraint,
+    MutualExclusionConstraint,
+    ParentChildConstraint,
+)
 from g2lc.operators.cost import scheme_cost, weighted_cost
 from g2lc.operators.derivation import distinguishes, exact_observed_predicates
 from g2lc.operators.models import AnnotationOperator
@@ -84,6 +94,121 @@ def _expression_to_z3(
     raise AssertionError(f"unhandled expression {type(expression).__name__}")
 
 
+def _condition_to_z3(
+    condition: EvidenceCondition,
+    variables: dict[str, z3.ArithRef],
+    indices: dict[str, dict[str, int]],
+) -> z3.BoolRef:
+    return (
+        variables[condition.predicate] == indices[condition.predicate][scalar_key(condition.equals)]
+    )
+
+
+def _feasibility_constraints_z3(
+    variables: dict[str, z3.ArithRef],
+    problem: LoadedCompilerProblem,
+    indices: dict[str, dict[str, int]],
+) -> list[z3.BoolRef]:
+    """Translate the complete finite feasibility contract without weakening it."""
+
+    result: list[z3.BoolRef] = []
+    for constraint in problem.ontology.feasibility.constraints:
+        if isinstance(constraint, ImplicationConstraint):
+            result.append(
+                z3.Implies(
+                    _condition_to_z3(constraint.antecedent, variables, indices),
+                    _condition_to_z3(constraint.consequent, variables, indices),
+                )
+            )
+        elif isinstance(constraint, MutualExclusionConstraint):
+            terms = [_condition_to_z3(item, variables, indices) for item in constraint.conditions]
+            result.append(z3.AtMost(*terms, 1))
+        elif isinstance(constraint, ConditionalAllowedConstraint):
+            allowed = z3.Or(
+                *[
+                    variables[constraint.predicate]
+                    == indices[constraint.predicate][scalar_key(item)]
+                    for item in constraint.allowed_values
+                ]
+            )
+            result.append(
+                z3.Implies(_condition_to_z3(constraint.antecedent, variables, indices), allowed)
+            )
+        elif isinstance(constraint, ExactlyOneConstraint):
+            result.append(
+                z3.PbEq(
+                    [
+                        (_condition_to_z3(item, variables, indices), 1)
+                        for item in constraint.conditions
+                    ],
+                    1,
+                )
+            )
+        elif isinstance(constraint, AtMostOneConstraint):
+            terms = [_condition_to_z3(item, variables, indices) for item in constraint.conditions]
+            result.append(z3.AtMost(*terms, 1))
+        elif isinstance(constraint, DerivedEqualityConstraint):
+            source_domain = problem.ontology.predicate(constraint.source_predicate).allowed_values
+            target_indices = indices[constraint.target_predicate]
+            cases = []
+            for source_index, source_value in enumerate(source_domain):
+                target_value = (
+                    constraint.value_mapping[scalar_key(source_value)]
+                    if constraint.value_mapping
+                    else source_value
+                )
+                cases.append(
+                    z3.And(
+                        variables[constraint.source_predicate] == source_index,
+                        variables[constraint.target_predicate]
+                        == target_indices[scalar_key(target_value)],
+                    )
+                )
+            result.append(z3.Or(*cases))
+        elif isinstance(constraint, ParentChildConstraint):
+            parent_active = z3.Or(
+                *[
+                    variables[constraint.parent_predicate]
+                    == indices[constraint.parent_predicate][scalar_key(item)]
+                    for item in constraint.when_parent_values
+                ]
+            )
+            child_allowed = z3.Or(
+                *[
+                    variables[constraint.child_predicate]
+                    == indices[constraint.child_predicate][scalar_key(item)]
+                    for item in constraint.allowed_child_values
+                ]
+            )
+            result.append(z3.Implies(parent_active, child_allowed))
+        else:  # pragma: no cover - the discriminated union is exhaustive
+            raise AssertionError(type(constraint).__name__)
+    return result
+
+
+def _derivation_constraints_z3(
+    variables: dict[str, z3.ArithRef],
+    problem: LoadedCompilerProblem,
+    indices: dict[str, dict[str, int]],
+) -> list[z3.BoolRef]:
+    result: list[z3.BoolRef] = []
+    for rule in problem.graph.rules:
+        source_id = rule.input_predicates[0]
+        target_id = rule.output_predicates[0]
+        source_domain = problem.ontology.predicate(source_id).allowed_values
+        cases = []
+        for source_index, source_value in enumerate(source_domain):
+            target_value = rule.value_mapping[scalar_key(source_value)]
+            cases.append(
+                z3.And(
+                    variables[source_id] == source_index,
+                    variables[target_id] == indices[target_id][scalar_key(target_value)],
+                )
+            )
+        result.append(z3.Or(*cases))
+    return result
+
+
 def _guideline_action_z3(
     guideline: Guideline,
     variables: dict[str, z3.ArithRef],
@@ -137,19 +262,39 @@ def _observation_equalities(
     problem: LoadedCompilerProblem,
 ) -> list[z3.BoolRef]:
     equalities: list[z3.BoolRef] = []
+    indices = _domain_index(problem)
     for operator in selected:
+        left_requirements = [
+            z3.Or(
+                *[
+                    left[item.predicate_id] == indices[item.predicate_id][scalar_key(value)]
+                    for value in item.allowed_values
+                ]
+            )
+            for item in operator.required_evidence_conditions
+        ]
+        right_requirements = [
+            z3.Or(
+                *[
+                    right[item.predicate_id] == indices[item.predicate_id][scalar_key(value)]
+                    for value in item.allowed_values
+                ]
+            )
+            for item in operator.required_evidence_conditions
+        ]
+        left_applicable = z3.And(*left_requirements) if left_requirements else z3.BoolVal(True)
+        right_applicable = z3.And(*right_requirements) if right_requirements else z3.BoolVal(True)
+        equalities.append(left_applicable == right_applicable)
         for predicate_id in operator.output_predicates:
             mapping = operator.value_mappings.get(predicate_id)
             if mapping is None:
-                equalities.append(left[predicate_id] == right[predicate_id])
+                observed_equal = left[predicate_id] == right[predicate_id]
             else:
                 domain = problem.ontology.predicate(predicate_id).allowed_values
-                equalities.append(
-                    _mapped_observation(left[predicate_id], domain, mapping)
-                    == _mapped_observation(right[predicate_id], domain, mapping)
-                )
-    for predicate_id in exact_observed_predicates(selected, problem.graph):
-        equalities.append(left[predicate_id] == right[predicate_id])
+                observed_equal = _mapped_observation(
+                    left[predicate_id], domain, mapping
+                ) == _mapped_observation(right[predicate_id], domain, mapping)
+            equalities.append(z3.Implies(left_applicable, observed_equal))
     return equalities
 
 
@@ -171,8 +316,12 @@ def find_counterexample(
     for predicate in problem.ontology.predicates:
         solver.add(left[predicate.id] >= 0, left[predicate.id] < len(predicate.allowed_values))
         solver.add(right[predicate.id] >= 0, right[predicate.id] < len(predicate.allowed_values))
-    solver.add(*_observation_equalities(selected, left, right, problem))
     indices = _domain_index(problem)
+    solver.add(*_feasibility_constraints_z3(left, problem, indices))
+    solver.add(*_feasibility_constraints_z3(right, problem, indices))
+    solver.add(*_derivation_constraints_z3(left, problem, indices))
+    solver.add(*_derivation_constraints_z3(right, problem, indices))
+    solver.add(*_observation_equalities(selected, left, right, problem))
     action_differences = []
     for guideline in problem.guidelines:
         action_differences.append(
@@ -228,23 +377,20 @@ def _solve_master(
         if operator_id not in variables:
             return [], SolverStatus.INFEASIBLE
         model.add(variables[operator_id] == 1)
-    count_factor = len(operators) + 1
-    model.minimize(
-        sum(
-            (_units(weighted_cost(operator, problem.config.instability_weight)) * count_factor + 1)
-            * variables[operator.id]
+    for operator in operators:
+        for required_id in operator.required_operator_ids:
+            if required_id not in variables:
+                model.add(variables[operator.id] == 0)
+            else:
+                model.add(variables[operator.id] <= variables[required_id])
+    return solve_lexicographic_model(
+        model,
+        variables,
+        {
+            operator.id: weighted_cost(operator, problem.config.instability_weight)
             for operator in operators
-        )
-    )
-    solver = cp_model.CpSolver()
-    solver.parameters.num_search_workers = 1
-    solver.parameters.random_seed = problem.config.seed
-    status = solver.solve(model)
-    if status not in {cp_model.OPTIMAL, cp_model.FEASIBLE}:
-        return [], SolverStatus.INFEASIBLE
-    return (
-        sorted(operator.id for operator in operators if solver.value(variables[operator.id])),
-        SolverStatus.OPTIMAL if status == cp_model.OPTIMAL else SolverStatus.FEASIBLE,
+        },
+        seed=problem.config.seed,
     )
 
 
@@ -274,11 +420,11 @@ def solve_counterexample_separation(
             return CompilerSolution(
                 status=CompilerStatus.EXECUTABLE,
                 solver=SolverKind.SEPARATION,
-                solver_status=SolverStatus.OPTIMAL,
+                solver_status=master_status,
                 selected_operators=selected_ids,
                 derived_predicates=sorted(exact_observed_predicates(selected, problem.graph)),
                 total_cost=scheme_cost(selected, problem.config.instability_weight),
-                optimal=True,
+                optimal=master_status is SolverStatus.OPTIMAL,
                 separated_pair_count=len(constraints),
                 required_pair_count=len(constraints),
                 iterations=iteration + 1,

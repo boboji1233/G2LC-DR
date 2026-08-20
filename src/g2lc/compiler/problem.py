@@ -5,6 +5,7 @@ from __future__ import annotations
 import itertools
 import math
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 
 from pydantic import Field, ValidationError, field_validator
@@ -14,10 +15,11 @@ from g2lc.guidelines.ast import Guideline, GuidelineBundle, guideline_predicates
 from g2lc.guidelines.evaluator import action_signature, evaluate_guideline
 from g2lc.guidelines.parser import load_guidelines
 from g2lc.guidelines.validator import validate_guidelines
+from g2lc.ontology.feasibility import is_feasible_state
 from g2lc.ontology.loader import load_ontology
 from g2lc.ontology.models import EvidenceOntology
 from g2lc.ontology.observability import find_observability_issues
-from g2lc.operators.derivation import distinguishes
+from g2lc.operators.derivation import derivations_consistent, distinguishes_scheme
 from g2lc.operators.lattice import (
     load_derivation_graph,
     load_operator_catalogue,
@@ -43,7 +45,7 @@ class CompilerProblem(StrictModel):
     operators: str
     derivations: str
     target_modalities: list[Modality] = Field(min_length=1)
-    instability_weight: float = Field(default=0, ge=0, allow_inf_nan=False)
+    instability_weight: Decimal = Field(default=Decimal(0), ge=0, allow_inf_nan=False)
     required_operators: list[str] = Field(default_factory=list)
     forbidden_operators: list[str] = Field(default_factory=list)
     max_states: int = Field(default=100_000, ge=1)
@@ -84,16 +86,22 @@ class LoadedCompilerProblem:
 
         target_modalities = set(self.config.target_modalities)
         forbidden = set(self.config.forbidden_operators)
-        return sorted(
-            (
-                operator
-                for operator in self.catalogue.operators
-                if operator.availability is OperatorAvailability.AVAILABLE
-                and operator.id not in forbidden
-                and set(operator.modalities).intersection(target_modalities)
-            ),
-            key=lambda item: item.id,
-        )
+        candidates = {
+            operator.id: operator
+            for operator in self.catalogue.operators
+            if operator.availability is OperatorAvailability.AVAILABLE
+            and operator.id not in forbidden
+            and set(operator.modalities).intersection(target_modalities)
+            and set(operator.required_modalities).issubset(target_modalities)
+        }
+        changed = True
+        while changed:
+            changed = False
+            for operator_id, operator in list(candidates.items()):
+                if not set(operator.required_operator_ids).issubset(candidates):
+                    del candidates[operator_id]
+                    changed = True
+        return sorted(candidates.values(), key=lambda item: item.id)
 
     def repair_operators(self) -> list[AnnotationOperator]:
         """Return modality-compatible unavailable operators usable only as suggestions."""
@@ -105,6 +113,7 @@ class LoadedCompilerProblem:
                 for operator in self.catalogue.operators
                 if operator.availability is not OperatorAvailability.AVAILABLE
                 and set(operator.modalities).intersection(target_modalities)
+                and set(operator.required_modalities).issubset(target_modalities)
             ),
             key=lambda item: item.id,
         )
@@ -220,13 +229,19 @@ def enumerate_states(problem: LoadedCompilerProblem) -> tuple[EvidenceState, ...
             f"finite state space has {state_count} states, exceeding max_states="
             f"{problem.config.max_states}; use the separation solver or reduce the language"
         )
-    return tuple(
+    states = (
         EvidenceState(
             values={
                 predicate.id: value for predicate, value in zip(predicates, values, strict=True)
             }
         )
         for values in itertools.product(*(predicate.allowed_values for predicate in predicates))
+    )
+    return tuple(
+        state
+        for state in states
+        if is_feasible_state(state, problem.ontology, complete=True)
+        and derivations_consistent(state, problem.graph)
     )
 
 
@@ -267,15 +282,22 @@ def build_finite_problem(
     if include_repair:
         operators = sorted([*operators, *loaded.repair_operators()], key=lambda item: item.id)
     coverage: dict[str, frozenset[int]] = {}
+    operator_map = {item.id: item for item in operators}
     for operator in operators:
+        closure_ids = {operator.id}
+        pending = list(operator.required_operator_ids)
+        while pending:
+            item = pending.pop()
+            if item in closure_ids or item not in operator_map:
+                continue
+            closure_ids.add(item)
+            pending.extend(operator_map[item].required_operator_ids)
+        closure = [operator_map[item] for item in sorted(closure_ids)]
         coverage[operator.id] = frozenset(
             pair_index
             for pair_index, pair in enumerate(pairs)
-            if distinguishes(
-                operator,
-                loaded.graph,
-                states[pair.left_index],
-                states[pair.right_index],
+            if distinguishes_scheme(
+                closure, loaded.graph, states[pair.left_index], states[pair.right_index]
             )
         )
     return FiniteProblem(

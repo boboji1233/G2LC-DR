@@ -10,7 +10,7 @@ from g2lc.compiler.problem import (
     build_finite_problem,
     preflight_oos,
 )
-from g2lc.compiler.repair import enrich_with_minimum_repair
+from g2lc.compiler.repair import enrich_with_minimum_repair, enrich_with_symbolic_repair
 from g2lc.compiler.result import (
     CompilerSolution,
     CompilerStatus,
@@ -43,7 +43,10 @@ def compile_problem(
             ],
         )
     if solver is SolverKind.SEPARATION:
-        return solve_counterexample_separation(loaded)
+        solution = solve_counterexample_separation(loaded)
+        return enrich_with_symbolic_repair(loaded, solution).model_copy(
+            update={"required_pair_count": None}
+        )
     finite = build_finite_problem(loaded)
     solution = solve_exact(finite) if solver is SolverKind.EXACT else solve_greedy(finite)
     return enrich_with_minimum_repair(loaded, finite, solution)
