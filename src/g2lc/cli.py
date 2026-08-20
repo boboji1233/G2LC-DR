@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -10,6 +11,7 @@ import typer
 from pydantic import ValidationError
 from rich.console import Console
 
+from g2lc.audit.stage1_5 import generate_gate, run_synthetic_matrix
 from g2lc.certificates.verifier import verify_certificate
 from g2lc.certificates.writer import build_certificate, write_certificate
 from g2lc.compiler.api import compile_problem
@@ -39,12 +41,14 @@ operator_app = typer.Typer(help="Annotation operator commands.")
 certificate_app = typer.Typer(help="Certificate commands.")
 synthetic_app = typer.Typer(help="Explicitly synthetic development fixtures.")
 data_app = typer.Typer(help="Metadata-only data governance commands.")
+audit_app = typer.Typer(help="Machine-readable stage-gate audits.")
 app.add_typer(ontology_app, name="ontology")
 app.add_typer(guideline_app, name="guideline")
 app.add_typer(operator_app, name="operator")
 app.add_typer(certificate_app, name="certificate")
 app.add_typer(synthetic_app, name="synthetic")
 app.add_typer(data_app, name="data")
+app.add_typer(audit_app, name="audit")
 console = Console()
 error_console = Console(stderr=True)
 
@@ -52,7 +56,14 @@ error_console = Console(stderr=True)
 def _emit(value: Any, json_output: bool) -> None:
     payload = value.model_dump(mode="json") if hasattr(value, "model_dump") else value
     if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        typer.echo(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=lambda item: str(item) if isinstance(item, Decimal) else repr(item),
+            )
+        )
     else:
         console.print(payload)
 
@@ -224,6 +235,44 @@ def synthetic_run(
         _fail(ValueError(f"unknown fixture {fixture!r}; choose one of {sorted(allowed)}"))
     project = Path("examples") / "synthetic" / fixture / "project.yaml"
     compile_command(project, solver, None, json_output)
+
+
+@synthetic_app.command("matrix")
+def synthetic_matrix(
+    random_seeds: Annotated[int, typer.Option("--random-seeds", min=1)] = 20,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Run deterministic finite/brute-force/Z3/separation/tamper equivalence checks."""
+
+    try:
+        result = run_synthetic_matrix(random_seeds=random_seeds)
+        _emit(result, json_output)
+        if not all(
+            bool(result[item]["passed"])
+            for item in (
+                "finite_vs_bruteforce_results",
+                "finite_vs_z3_results",
+                "exact_vs_separation_results",
+                "verifier_independence_check",
+                "tamper_matrix_results",
+            )
+        ):
+            raise typer.Exit(code=1)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@audit_app.command("stage1-5")
+def audit_stage1_5(
+    output: Annotated[Path, typer.Option("--output")] = Path("artifacts/audit/stage1_5/gate.json"),
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Generate the Stage-1.5 gate from current command, coverage, and matrix evidence."""
+
+    try:
+        _emit(generate_gate(output), json_output)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
 
 
 @data_app.command("audit")

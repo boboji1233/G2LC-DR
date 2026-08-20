@@ -103,13 +103,30 @@ class EvidenceState(StrictModel):
 
 
 def scalar_key(value: JsonScalar) -> str:
-    """Return a stable mapping key without conflating booleans and integers."""
+    """Return a stable typed mapping key.
+
+    JSON and Python both make it easy to conflate ``true``, ``1``, ``1.0`` and
+    ``"1"``.  Operator mappings and solver domain indices are semantic data, so the
+    runtime type is part of their key.
+    """
 
     if value is None:
-        return "null"
+        return "null:"
     if isinstance(value, bool):
-        return "true" if value else "false"
-    return str(value)
+        return f"bool:{str(value).lower()}"
+    if isinstance(value, str):
+        return f"str:{value}"
+    if isinstance(value, int):
+        return f"int:{value}"
+    if isinstance(value, float):
+        return f"float:{value!r}"
+    raise TypeError(f"expected a JSON scalar, got {type(value).__name__}")
+
+
+def scalar_equal(left: JsonScalar, right: JsonScalar) -> bool:
+    """Compare finite-domain values without Python's bool/int coercion."""
+
+    return type(left) is type(right) and left == right
 
 
 def json_scalar(value: Any) -> JsonScalar:
