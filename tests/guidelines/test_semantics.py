@@ -70,15 +70,19 @@ def test_nested_not(minimal_problem) -> None:  # type: ignore[no-untyped-def]
     assert evaluate_expression(expression, state, minimal_problem.ontology) is TriValue.TRUE
 
 
-def test_partial_state_is_insufficient_not_routine(minimal_problem) -> None:  # type: ignore[no-untyped-def]
+def test_partial_state_returns_all_possible_completion_actions(minimal_problem) -> None:  # type: ignore[no-untyped-def]
     guideline = minimal_problem.guidelines[0]
     result = evaluate_guideline(
         guideline,
         EvidenceState(values={"gradable": "yes"}),
         minimal_problem.ontology,
     )
-    assert result.status is EvaluationStatus.INSUFFICIENT_EVIDENCE
-    assert result.actions == []
+    assert result.status is EvaluationStatus.ACTION_SET
+    assert {item.values["decision"] for item in result.actions} == {
+        "monitor",
+        "refer",
+        "routine",
+    }
 
 
 def test_ungradable_priority_wins(minimal_problem) -> None:  # type: ignore[no-untyped-def]
