@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   import:
-    if: github.event.head_commit.message == 'Bootstrap G2LC-DR repository'
+    if: github.event.head_commit.message == 'Retry G2LC-DR repository import'
     runs-on: ubuntu-latest
     steps:
       - name: Check out existing repository
@@ -44,8 +44,6 @@ jobs:
           PY
 
           rm -f -- hello.py
-          rm -f -- .github/workflows/import-g2lc-dr.yml
-
       - name: Commit imported project
         shell: bash
         run: |
