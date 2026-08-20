@@ -40,7 +40,7 @@ def test_cli_invalid_fixture_is_nonzero() -> None:
     assert result.exit_code == 2
 
 
-def test_cli_unknown_evidence_stays_insufficient(tmp_path) -> None:  # type: ignore[no-untyped-def]
+def test_cli_unknown_evidence_reports_possible_actions(tmp_path) -> None:  # type: ignore[no-untyped-def]
     state = tmp_path / "state.yaml"
     state.write_text("gradable: 'yes'\n", encoding="utf-8")
     result = runner.invoke(
@@ -60,7 +60,8 @@ def test_cli_unknown_evidence_stays_insufficient(tmp_path) -> None:  # type: ign
         ],
     )
     assert result.exit_code == 0
-    assert "INSUFFICIENT_EVIDENCE" in result.stdout
+    assert "ACTION_SET" in result.stdout
+    assert all(item in result.stdout for item in ("monitor", "refer", "routine"))
 
 
 def test_cli_data_adapter_dry_run(tmp_path) -> None:  # type: ignore[no-untyped-def]
