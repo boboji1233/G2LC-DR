@@ -80,12 +80,17 @@ feasibility, derivation, modality, and guideline semantics.
    deterministic derivations, prerequisites, exact objectives, incremental repair,
    independent certificate verification, tamper rejection, branch coverage, and a
    reproducible review bundle. Gate: `artifacts/audit/stage1_5/gate.json` is `PASS`.
-6. **Stage 2 — data metadata only (A-02/A-03/F-01):** remains frozen for this task;
+6. **Stage 1.6 — cross-path hardening:** dual-Python CI, prerequisite-closed greedy,
+   feasibility/derivation parity, evidence-language non-vacuity, relevant-state closure,
+   bounded exact repair, generated semantic differential testing, and commit-bound review.
+   Gate: `artifacts/audit/stage1_6/gate.json` is `PASS`; GitHub Actions and human review
+   remain separate merge conditions.
+7. **Stage 2 — data metadata only (A-02/A-03/F-01):** remains frozen for this task;
    later work also requires explicit authorization and legal local inputs. Missing gated
    datasets remain `BLOCKED`; no synthetic substitute.
-7. **Stage 3 — Oracle (E-01–E-04):** begins only after legal data access and split
+8. **Stage 3 — Oracle (E-01–E-04):** begins only after legal data access and split
    locks. Gate E determines whether any visual model work is scientifically valid.
-8. **Later stages F–I:** visual evidence, baselines, experiments and paper outputs
+9. **Later stages F–I:** visual evidence, baselines, experiments and paper outputs
    remain out of scope until preceding gates pass.
 
 ## First vertical-slice acceptance
@@ -121,3 +126,14 @@ core line coverage of at least 95%, and core branch coverage of at least 90%. Th
 runner `uv run python scripts/stage1_5_gate.py` records every command and exit code.
 The current checkout satisfies this gate; the authoritative result and measurements are
 stored in `artifacts/audit/stage1_5/gate.json`. This does not authorize Stage 2 work.
+
+## Stage 1.6 acceptance
+
+```bash
+uv run python scripts/stage1_6_gate.py
+uv run g2lc audit stage1-6 --required-pythons 3.11,3.12 \
+  --output artifacts/audit/stage1_6/gate.json
+```
+
+The gate retains the Stage-1.5 coverage floors, requires 200 generated semantic problems,
+records actual subprocess exit codes, and verifies a commit-bound privacy-safe archive.

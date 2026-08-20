@@ -85,7 +85,7 @@ def test_production_synthetic_matrix_runs_all_checks() -> None:
     assert result["finite_vs_bruteforce_results"]["passed"] is True
     assert result["exact_vs_separation_results"]["passed"] is True
     assert result["verifier_independence_check"]["passed"] is True
-    assert result["tamper_matrix_results"]["rejected_count"] == 45
+    assert result["tamper_matrix_results"]["rejected_count"] == 54
 
 
 def test_required_fixture_manifest_is_complete() -> None:

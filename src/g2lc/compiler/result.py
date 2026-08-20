@@ -16,6 +16,7 @@ class CompilerStatus(StrEnum):
     EXECUTABLE = "EXECUTABLE"
     INCOMPLETE = "INCOMPLETE"
     OUT_OF_SPEC = "OUT_OF_SPEC"
+    UNSAT_EVIDENCE_LANGUAGE = "UNSAT_EVIDENCE_LANGUAGE"
 
 
 class SolverKind(StrEnum):

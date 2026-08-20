@@ -5,10 +5,22 @@ from __future__ import annotations
 import itertools
 from decimal import Decimal
 
-from g2lc.compiler.problem import FiniteProblem, LoadedCompilerProblem, build_finite_problem
-from g2lc.compiler.result import CompilerSolution, CompilerStatus
-from g2lc.operators.cost import scheme_cost
+from ortools.sat.python import cp_model
+
+from g2lc.compiler.exact import solve_lexicographic_model
+from g2lc.compiler.problem import (
+    FiniteProblem,
+    LoadedCompilerProblem,
+    build_finite_problem,
+    scheme_coverage,
+)
+from g2lc.compiler.result import CompilerSolution, CompilerStatus, SolverStatus
+from g2lc.errors import CompilationError
+from g2lc.operators.cost import scheme_cost, weighted_cost
+from g2lc.operators.lattice import operator_prerequisite_closure
 from g2lc.operators.models import OperatorAvailability
+
+BRUTE_FORCE_REPAIR_LIMIT = 18
 
 
 def missing_predicates(finite: FiniteProblem) -> list[str]:
@@ -49,38 +61,79 @@ def enrich_with_minimum_repair(
         for item in repaired_finite.operators
         if item.availability is OperatorAvailability.AVAILABLE
     }
-    base_coverage = (
-        set().union(*(repaired_finite.coverage[item] for item in available_ids))
-        if available_ids
-        else set()
-    )
+    base_coverage = set(scheme_coverage(repaired_finite, available_ids))
     universe = set(range(len(repaired_finite.pairs)))
+    model = cp_model.CpModel()
+    variables = {item: model.new_bool_var(item) for item in sorted(unavailable)}
+    for pair_index in sorted(universe - base_coverage):
+        separating = [
+            variables[item]
+            for item in sorted(unavailable)
+            if pair_index in repaired_finite.coverage[item]
+        ]
+        if not separating:
+            return solution.model_copy(update={"missing_predicates": missing_predicates(finite)})
+        model.add(sum(separating) >= 1)
+    all_operator_map = {item.id: item for item in repaired_finite.operators}
+    for operator_id, variable in variables.items():
+        for required_id in all_operator_map[operator_id].required_operator_ids:
+            if required_id in available_ids:
+                continue
+            if required_id in variables:
+                model.add(variable <= variables[required_id])
+            else:
+                model.add(variable == 0)
+    selected_ids, repair_status = solve_lexicographic_model(
+        model,
+        variables,
+        {
+            item: weighted_cost(unavailable[item], loaded.config.instability_weight)
+            for item in variables
+        },
+        seed=loaded.config.seed,
+    )
     best: tuple[Decimal, int, tuple[str, ...]] | None = None
-    for flags in itertools.product((False, True), repeat=len(unavailable)):
-        ids = tuple(
-            item for item, selected in zip(sorted(unavailable), flags, strict=True) if selected
+    if repair_status is not SolverStatus.INFEASIBLE:
+        closure = operator_prerequisite_closure(available_ids | set(selected_ids), all_operator_map)
+        additions = tuple(sorted(set(closure) - available_ids))
+        if set(scheme_coverage(repaired_finite, set(closure))) != universe:
+            raise CompilationError("CP-SAT repair candidate failed independent finite coverage")
+        best = (
+            scheme_cost(
+                [all_operator_map[item] for item in additions],
+                loaded.config.instability_weight,
+            ),
+            len(additions),
+            additions,
         )
-        if any(
-            not set(unavailable[item].required_operator_ids).issubset(available_ids | set(ids))
-            for item in ids
-        ):
-            continue
-        coverage = set(base_coverage)
-        coverage.update(
-            *[repaired_finite.coverage[item] for item in ids],
-        )
-        if coverage != universe:
-            continue
-        cost = scheme_cost([unavailable[item] for item in ids], loaded.config.instability_weight)
-        key = (cost, len(ids), ids)
-        if best is None or key < best:
-            best = key
-    additions = list(best[2]) if best is not None else []
+
+    if len(unavailable) <= BRUTE_FORCE_REPAIR_LIMIT:
+        oracle: tuple[Decimal, int, tuple[str, ...]] | None = None
+        for flags in itertools.product((False, True), repeat=len(unavailable)):
+            ids = {
+                item for item, selected in zip(sorted(unavailable), flags, strict=True) if selected
+            }
+            scheme = available_ids | ids
+            closure_ids = set(operator_prerequisite_closure(scheme, all_operator_map))
+            if closure_ids != scheme or set(scheme_coverage(repaired_finite, scheme)) != universe:
+                continue
+            cost = scheme_cost(
+                [unavailable[item] for item in sorted(ids)],
+                loaded.config.instability_weight,
+            )
+            key = (cost, len(ids), tuple(sorted(ids)))
+            if oracle is None or key < oracle:
+                oracle = key
+        if oracle != best:
+            raise CompilationError(
+                f"CP-SAT incremental repair disagrees with brute-force oracle: {best} != {oracle}"
+            )
+    result_additions = list(best[2]) if best is not None else []
     repair_cost = best[0] if best is not None else None
     return solution.model_copy(
         update={
             "missing_predicates": missing_predicates(finite),
-            "minimal_additions": additions,
+            "minimal_additions": result_additions,
             "minimum_repair_cost": repair_cost,
         }
     )
@@ -112,6 +165,11 @@ def enrich_with_symbolic_repair(
         }
     )
     repair = {item.id: item for item in loaded.repair_operators()}
+    if len(repair) > BRUTE_FORCE_REPAIR_LIMIT:
+        raise CompilationError(
+            "symbolic incremental repair exceeds the fail-closed brute-force limit "
+            f"of {BRUTE_FORCE_REPAIR_LIMIT} unavailable operators"
+        )
     all_operators = loaded.catalogue.operator_map()
     best: tuple[Decimal, int, tuple[str, ...]] | None = None
     for flags in itertools.product((False, True), repeat=len(repair)):

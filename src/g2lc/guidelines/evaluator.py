@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import Field
@@ -23,6 +24,8 @@ from g2lc.guidelines.ast import (
 from g2lc.guidelines.trivalued import TriValue, tri_and, tri_or
 from g2lc.ontology.feasibility import feasible_completions
 from g2lc.ontology.models import EvidenceOntology
+from g2lc.operators.derivation import derivations_consistent
+from g2lc.operators.models import DerivationGraph
 from g2lc.types import EvidenceState, StrictModel, scalar_equal
 from g2lc.utils.io import canonical_json
 
@@ -44,6 +47,15 @@ class GuidelineEvaluation(StrictModel):
     matched_clauses: list[str] = Field(default_factory=list)
     unknown_clauses: list[str] = Field(default_factory=list)
     unsupported_predicates: list[str] = Field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DecisionContext:
+    """Formal decision environment shared by complete and partial evaluation."""
+
+    ontology: EvidenceOntology
+    derivations: DerivationGraph | None = None
+    semantic_contract_version: str = "action-only-decision-sufficiency-v1.1"
 
 
 def validate_evidence_state(state: EvidenceState, ontology: EvidenceOntology) -> None:
@@ -121,6 +133,8 @@ def evaluate_guideline(
     guideline: Guideline,
     state: EvidenceState,
     ontology: EvidenceOntology,
+    *,
+    derivations: DerivationGraph | None = None,
 ) -> GuidelineEvaluation:
     """Evaluate priorities while retaining ambiguity and missing evidence."""
 
@@ -148,12 +162,16 @@ def evaluate_guideline(
     action_by_key: dict[str, ClinicalAction] = {}
     matched: set[str] = set()
     if missing:
-        for complete in feasible_completions(state, ontology):
+        for complete in feasible_completions(state, ontology, derivations):
             actions, winner_ids = _evaluate_complete(guideline, complete, ontology)
             matched.update(winner_ids)
             for action in actions:
                 action_by_key[canonical_json(action.model_dump(mode="json"))] = action
     else:
+        if derivations is not None and not derivations_consistent(state, derivations):
+            raise GuidelineValidationError(
+                "complete evidence state is inconsistent with deterministic derivations"
+            )
         actions, winner_ids = _evaluate_complete(guideline, state, ontology)
         matched.update(winner_ids)
         for action in actions:

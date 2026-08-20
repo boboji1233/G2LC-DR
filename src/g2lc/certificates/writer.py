@@ -7,6 +7,7 @@ from typing import Any, cast
 
 from g2lc.certificates.models import (
     Certificate,
+    EvidenceLanguagePayload,
     ExecutabilityCertificate,
     MissingEvidenceCertificate,
     OptimalityPayload,
@@ -14,9 +15,16 @@ from g2lc.certificates.models import (
     SourceHash,
     VerificationPayload,
 )
-from g2lc.compiler.problem import LoadedCompilerProblem, enumerate_states
+from g2lc.compiler.counterexample import find_feasible_state
+from g2lc.compiler.problem import (
+    LoadedCompilerProblem,
+    enumerate_states,
+    relevant_predicate_closure,
+)
 from g2lc.compiler.result import CompilerSolution, CompilerStatus
-from g2lc.utils.io import canonical_json, sha256_file, sha256_json
+from g2lc.errors import CompilationError
+from g2lc.operators.lattice import operator_prerequisite_closure
+from g2lc.utils.io import canonical_json, load_yaml, sha256_file, sha256_json
 
 
 def _repository_root(path: Path) -> Path:
@@ -73,19 +81,11 @@ def _base_payload(
     if solution.status is not CompilerStatus.OUT_OF_SPEC and not symbolic:
         state_count = len(enumerate_states(loaded))
     selected_map = loaded.catalogue.operator_map()
-    closure = set(solution.selected_operators)
-    pending = [
-        required
-        for item in solution.selected_operators
-        for required in selected_map[item].required_operator_ids
-        if item in selected_map
-    ]
-    while pending:
-        item = pending.pop()
-        if item in closure or item not in selected_map:
-            continue
-        closure.add(item)
-        pending.extend(selected_map[item].required_operator_ids)
+    closure = set(operator_prerequisite_closure(solution.selected_operators, selected_map))
+    witness = find_feasible_state(loaded)
+    if witness is None:
+        raise CompilationError("UNSAT_EVIDENCE_LANGUAGE cannot produce a certificate")
+    relevant = list(relevant_predicate_closure(loaded))
     guideline_source_hashes = {
         str(path.resolve()): sha256_file(path) for path in loaded.guideline_paths
     }
@@ -126,6 +126,7 @@ def _base_payload(
             "None alone denotes unknown evidence",
             "typed scalar identity distinguishes booleans, integers, numbers, and strings",
             "only declared feasibility and deterministic unary derivations constrain states",
+            "the evidence language contains at least one legal complete state",
             "synthetic fixtures are not clinical rules or measured costs",
         ],
         "project_id": loaded.config.project_id,
@@ -139,8 +140,16 @@ def _base_payload(
         },
         "operator_catalogue_hash": sha256_file(loaded.operator_path),
         "derivation_graph_hash": sha256_file(loaded.derivation_path),
-        "feasibility_hash": sha256_json(loaded.ontology.feasibility.model_dump(mode="json")),
+        "feasibility_hash": sha256_json(
+            load_yaml(loaded.ontology_path).get(
+                "feasibility", {"schema_version": "1.0", "constraints": []}
+            )
+        ),
         "decision_program_hash": sha256_json(decision_program),
+        "evidence_language": EvidenceLanguagePayload(witness_hash=sha256_json(witness.values)),
+        "relevant_predicates": relevant,
+        "relevant_predicate_closure_hash": sha256_json(relevant),
+        "semantic_generated_gate_passed": None,
         "selected_operators": solution.selected_operators,
         "derived_predicates": solution.derived_predicates,
         "operator_closure": {
@@ -196,6 +205,10 @@ def build_certificate(
 ) -> Certificate:
     """Construct the certificate subtype implied by a compiler solution."""
 
+    if solution.status is CompilerStatus.UNSAT_EVIDENCE_LANGUAGE:
+        raise CompilationError(
+            "UNSAT_EVIDENCE_LANGUAGE cannot be certified as executable, incomplete, or OOS"
+        )
     payload = _base_payload(loaded, solution)
     if solution.status is CompilerStatus.EXECUTABLE:
         payload.update(
@@ -204,7 +217,11 @@ def build_certificate(
                 "guidelines_covered": sorted(
                     f"{item.id}@{item.version}" for item in loaded.guidelines
                 ),
-                "clauses_covered": sorted(
+                "decision_programs_covered": sorted(
+                    f"{item.id}@{item.version}" for item in loaded.guidelines
+                ),
+                "action_distinctions_covered": solution.required_pair_count or 0,
+                "clauses_provenance": sorted(
                     f"{guideline.id}:{rule.id}"
                     for guideline in loaded.guidelines
                     for rule in guideline.rules

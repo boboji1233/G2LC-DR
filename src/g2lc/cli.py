@@ -11,7 +11,9 @@ import typer
 from pydantic import ValidationError
 from rich.console import Console
 
-from g2lc.audit.stage1_5 import generate_gate, run_synthetic_matrix
+from g2lc.audit.stage1_5 import generate_gate as generate_stage1_5_gate
+from g2lc.audit.stage1_5 import run_synthetic_matrix
+from g2lc.audit.stage1_6 import generate_gate as generate_stage1_6_gate
 from g2lc.certificates.verifier import verify_certificate
 from g2lc.certificates.writer import build_certificate, write_certificate
 from g2lc.compiler.api import compile_problem
@@ -240,12 +242,16 @@ def synthetic_run(
 @synthetic_app.command("matrix")
 def synthetic_matrix(
     random_seeds: Annotated[int, typer.Option("--random-seeds", min=1)] = 20,
+    semantic_generated_cases: Annotated[int, typer.Option("--semantic-generated-cases", min=0)] = 0,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Run deterministic finite/brute-force/Z3/separation/tamper equivalence checks."""
 
     try:
-        result = run_synthetic_matrix(random_seeds=random_seeds)
+        result = run_synthetic_matrix(
+            random_seeds=random_seeds,
+            semantic_generated_cases=semantic_generated_cases,
+        )
         _emit(result, json_output)
         if not all(
             bool(result[item]["passed"])
@@ -257,6 +263,8 @@ def synthetic_matrix(
                 "tamper_matrix_results",
             )
         ):
+            raise typer.Exit(code=1)
+        if semantic_generated_cases and not result["semantic_generated_results"]["passed"]:
             raise typer.Exit(code=1)
     except (G2LCError, ValidationError, OSError) as exc:
         _fail(exc)
@@ -270,7 +278,24 @@ def audit_stage1_5(
     """Generate the Stage-1.5 gate from current command, coverage, and matrix evidence."""
 
     try:
-        _emit(generate_gate(output), json_output)
+        _emit(generate_stage1_5_gate(output), json_output)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@audit_app.command("stage1-6")
+def audit_stage1_6(
+    output: Annotated[Path, typer.Option("--output")] = Path("artifacts/audit/stage1_6/gate.json"),
+    required_pythons: Annotated[str | None, typer.Option("--required-pythons")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Aggregate recorded Stage-1.6 evidence without self-asserted command success."""
+
+    try:
+        required = (
+            [item.strip() for item in required_pythons.split(",")] if required_pythons else None
+        )
+        _emit(generate_stage1_6_gate(output, required), json_output)
     except (G2LCError, ValidationError, OSError) as exc:
         _fail(exc)
 

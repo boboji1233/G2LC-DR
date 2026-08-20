@@ -5,6 +5,20 @@ made any clinical-validation or experiment-result claim.
 
 ## [Unreleased]
 
+### Stage 1.6 cross-path hardening
+
+- Fixed Python 3.12 mypy targeting by allowing the active interpreter to select syntax.
+- Made greedy and dominance prerequisite-closure aware, with closure cost charged once.
+- Unified finite conflict, partial evaluation, finite enumeration, Z3, and independent
+  verification around feasibility, deterministic derivation, and nonempty-language rules.
+- Added decision-relevant state projection, CP-SAT incremental repair with a bounded
+  brute-force oracle, and fail-closed symbolic repair limits.
+- Added 200 generated semantic problems varying ontology/rules/constraints/derivations/
+  prerequisites, 54 rehashed tamper cases, dual-Python CI, and a commit-bound verified bundle.
+- Added certificate non-vacuity and relevant-closure evidence and replaced misleading
+  clause-coverage naming with decision-program/action-distinction provenance.
+- Stage 2, real-data parsing, Oracle experiments, and visual-model work remain frozen.
+
 ### Stage 1.5 semantic soundness
 
 - Replaced trace-sensitive equivalence with one action-only decision signature shared by

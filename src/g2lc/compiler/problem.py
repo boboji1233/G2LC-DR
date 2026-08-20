@@ -15,14 +15,24 @@ from g2lc.guidelines.ast import Guideline, GuidelineBundle, guideline_predicates
 from g2lc.guidelines.evaluator import action_signature, evaluate_guideline
 from g2lc.guidelines.parser import load_guidelines
 from g2lc.guidelines.validator import validate_guidelines
-from g2lc.ontology.feasibility import is_feasible_state
+from g2lc.ontology.feasibility import feasible_completions, is_feasible_state
 from g2lc.ontology.loader import load_ontology
-from g2lc.ontology.models import EvidenceOntology
+from g2lc.ontology.models import (
+    AtMostOneConstraint,
+    ConditionalAllowedConstraint,
+    DerivedEqualityConstraint,
+    EvidenceOntology,
+    ExactlyOneConstraint,
+    ImplicationConstraint,
+    MutualExclusionConstraint,
+    ParentChildConstraint,
+)
 from g2lc.ontology.observability import find_observability_issues
 from g2lc.operators.derivation import derivations_consistent, distinguishes_scheme
 from g2lc.operators.lattice import (
     load_derivation_graph,
     load_operator_catalogue,
+    operator_prerequisite_closure,
     validate_operators,
 )
 from g2lc.operators.models import (
@@ -187,7 +197,7 @@ def load_compiler_problem(path: str | Path) -> LoadedCompilerProblem:
     )
     if not preflight_oos(loaded):
         for bundle in bundles:
-            validate_guidelines(bundle, ontology)
+            validate_guidelines(bundle, ontology, graph)
     return loaded
 
 
@@ -245,22 +255,113 @@ def enumerate_states(problem: LoadedCompilerProblem) -> tuple[EvidenceState, ...
     )
 
 
+def _constraint_predicates(constraint: object) -> set[str]:
+    if isinstance(constraint, ImplicationConstraint):
+        return {constraint.antecedent.predicate, constraint.consequent.predicate}
+    if isinstance(
+        constraint,
+        (MutualExclusionConstraint, ExactlyOneConstraint, AtMostOneConstraint),
+    ):
+        return {item.predicate for item in constraint.conditions}
+    if isinstance(constraint, ConditionalAllowedConstraint):
+        return {constraint.antecedent.predicate, constraint.predicate}
+    if isinstance(constraint, DerivedEqualityConstraint):
+        return {constraint.source_predicate, constraint.target_predicate}
+    if isinstance(constraint, ParentChildConstraint):
+        return {constraint.parent_predicate, constraint.child_predicate}
+    raise AssertionError(type(constraint).__name__)
+
+
+def relevant_predicate_closure(problem: LoadedCompilerProblem) -> tuple[str, ...]:
+    """Return the sound decision/feasibility/derivation/operator dependency closure."""
+
+    closure = set(problem.referenced_predicates())
+    operator_map = problem.catalogue.operator_map()
+    required_ids = operator_prerequisite_closure(
+        problem.config.required_operators,
+        operator_map,
+    )
+    for operator_id in required_ids:
+        required_operator = operator_map[operator_id]
+        closure.update(required_operator.output_predicates)
+        closure.update(item.predicate_id for item in required_operator.required_evidence_conditions)
+    changed = True
+    while changed:
+        before = set(closure)
+        for constraint in problem.ontology.feasibility.constraints:
+            predicates = _constraint_predicates(constraint)
+            if predicates & closure:
+                closure.update(predicates)
+        for rule in problem.graph.rules:
+            predicates = set(rule.input_predicates) | set(rule.output_predicates)
+            if predicates & closure:
+                closure.update(predicates)
+        for operator in problem.catalogue.operators:
+            outputs = set(operator.output_predicates)
+            if not outputs & closure:
+                continue
+            closure.update(item.predicate_id for item in operator.required_evidence_conditions)
+            prerequisite_ids = operator_prerequisite_closure(
+                operator.required_operator_ids,
+                operator_map,
+            )
+            for prerequisite_id in prerequisite_ids:
+                prerequisite = operator_map[prerequisite_id]
+                closure.update(prerequisite.output_predicates)
+                closure.update(
+                    item.predicate_id for item in prerequisite.required_evidence_conditions
+                )
+        changed = closure != before
+    return tuple(sorted(closure))
+
+
+def enumerate_relevant_states(problem: LoadedCompilerProblem) -> tuple[EvidenceState, ...]:
+    """Enumerate feasible decision-relevant projections without unrelated dimensions."""
+
+    predicate_ids = relevant_predicate_closure(problem)
+    predicates = [problem.ontology.predicate(item) for item in predicate_ids]
+    state_count = math.prod(len(item.allowed_values) for item in predicates)
+    if state_count > problem.config.max_states:
+        raise CompilationError(
+            f"relevant finite state space has {state_count} states, exceeding "
+            f"max_states={problem.config.max_states}"
+        )
+    result: list[EvidenceState] = []
+    for values in itertools.product(*(item.allowed_values for item in predicates)):
+        projected = EvidenceState(
+            values={item.id: value for item, value in zip(predicates, values, strict=True)}
+        )
+        if next(feasible_completions(projected, problem.ontology, problem.graph), None) is not None:
+            result.append(projected)
+    if not result:
+        raise CompilationError("UNSAT_EVIDENCE_LANGUAGE: no legal complete state exists")
+    return tuple(result)
+
+
 def build_finite_problem(
     loaded: LoadedCompilerProblem,
     *,
     include_repair: bool = False,
+    relevant_only: bool = False,
 ) -> FiniteProblem:
     """Construct the exact action-separating state-pair universe."""
 
     if preflight_oos(loaded):
         raise CompilationError("cannot build a finite compiler problem with OOS predicates")
-    states = enumerate_states(loaded)
+    states = enumerate_relevant_states(loaded) if relevant_only else enumerate_states(loaded)
+    if not states:
+        raise CompilationError("UNSAT_EVIDENCE_LANGUAGE: no legal complete state exists")
     action_rows: list[dict[str, str]] = []
     for state in states:
         action_rows.append(
             {
                 guideline.id: action_signature(
-                    evaluate_guideline(guideline, state, loaded.ontology)
+                    evaluate_guideline(
+                        guideline,
+                        state,
+                        loaded.ontology,
+                        derivations=loaded.graph,
+                    )
                 )
                 for guideline in loaded.guidelines
             }
@@ -281,18 +382,24 @@ def build_finite_problem(
     operators = loaded.available_operators()
     if include_repair:
         operators = sorted([*operators, *loaded.repair_operators()], key=lambda item: item.id)
+    if relevant_only:
+        relevant = set(relevant_predicate_closure(loaded))
+        required_ids = set(
+            operator_prerequisite_closure(
+                loaded.config.required_operators,
+                loaded.catalogue.operator_map(),
+            )
+        )
+        operators = [
+            item
+            for item in operators
+            if item.id in required_ids or set(item.output_predicates) & relevant
+        ]
     coverage: dict[str, frozenset[int]] = {}
     operator_map = {item.id: item for item in operators}
     for operator in operators:
-        closure_ids = {operator.id}
-        pending = list(operator.required_operator_ids)
-        while pending:
-            item = pending.pop()
-            if item in closure_ids or item not in operator_map:
-                continue
-            closure_ids.add(item)
-            pending.extend(operator_map[item].required_operator_ids)
-        closure = [operator_map[item] for item in sorted(closure_ids)]
+        closure_ids = operator_prerequisite_closure([operator.id], operator_map)
+        closure = [operator_map[item] for item in closure_ids]
         coverage[operator.id] = frozenset(
             pair_index
             for pair_index, pair in enumerate(pairs)
@@ -308,6 +415,16 @@ def build_finite_problem(
         operators=tuple(operators),
         coverage=coverage,
     )
+
+
+def scheme_coverage(finite: FiniteProblem, selected_ids: set[str]) -> frozenset[int]:
+    """Return coverage for a complete prerequisite-closed Stage-1.5 scheme."""
+
+    operator_map = {item.id: item for item in finite.operators}
+    closure = operator_prerequisite_closure(selected_ids, operator_map)
+    if not closure:
+        return frozenset()
+    return frozenset().union(*(finite.coverage[item] for item in closure))
 
 
 def make_counterexample(

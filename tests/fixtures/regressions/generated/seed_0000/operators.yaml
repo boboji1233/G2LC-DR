@@ -1,0 +1,31 @@
+schema_version: '1.0'
+catalogue_id: generated_0
+version: 1.0.0-synthetic
+synthetic: true
+provenance: &id001
+  source: Stage-1.6 generated semantic seed 0
+  version: 1.0.0-synthetic
+  review_status: SYNTHETIC
+operators:
+- id: observe_p0
+  name: Observe p0
+  output_predicates:
+  - p0
+  granularity: PRESENCE
+  modalities:
+  - CFP
+  cost: '1.0'
+  instability: '0.0'
+  required_operator_ids: []
+  provenance: *id001
+- id: observe_p1
+  name: Observe p1
+  output_predicates:
+  - p1
+  granularity: PRESENCE
+  modalities:
+  - CFP
+  cost: '2.1'
+  instability: '0.1'
+  required_operator_ids: []
+  provenance: *id001

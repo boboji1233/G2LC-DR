@@ -21,12 +21,13 @@ from g2lc.guidelines.ast import (
     LessEqual,
     Not,
     Or,
-    expression_predicates,
 )
 from g2lc.guidelines.evaluator import evaluate_expression
 from g2lc.guidelines.trivalued import TriValue
 from g2lc.ontology.feasibility import feasibility_constraints_z3
 from g2lc.ontology.models import EvidenceOntology
+from g2lc.operators.derivation import derivations_consistent
+from g2lc.operators.models import DerivationGraph
 from g2lc.types import EvidenceState, ReviewStatus, ValueType, scalar_equal, scalar_key
 from g2lc.utils.io import canonical_json
 
@@ -34,19 +35,27 @@ from g2lc.utils.io import canonical_json
 def validate_guidelines(
     bundle: GuidelineBundle,
     ontology: EvidenceOntology | None = None,
+    derivations: DerivationGraph | None = None,
     *,
     conflict_state_limit: int = 10_000,
 ) -> None:
     """Validate provenance, action shape, predicate types and finite conflicts."""
 
     for guideline in bundle.guidelines:
-        _validate_guideline(guideline, bundle.synthetic, ontology, conflict_state_limit)
+        _validate_guideline(
+            guideline,
+            bundle.synthetic,
+            ontology,
+            derivations,
+            conflict_state_limit,
+        )
 
 
 def _validate_guideline(
     guideline: Guideline,
     bundle_synthetic: bool,
     ontology: EvidenceOntology | None,
+    derivations: DerivationGraph | None,
     conflict_state_limit: int,
 ) -> None:
     schema = set(guideline.action_schema)
@@ -91,12 +100,11 @@ def _validate_guideline(
         return
     for rule in guideline.rules:
         _validate_expression(rule.when, ontology, f"{guideline.id}.{rule.id}")
-    relevant = sorted(set().union(*(expression_predicates(rule.when) for rule in guideline.rules)))
-    state_count = math.prod(len(ontology.predicate(item).allowed_values) for item in relevant)
+    state_count = math.prod(len(item.allowed_values) for item in ontology.predicates)
     if state_count <= conflict_state_limit:
-        _reject_same_priority_conflicts(guideline, ontology, relevant)
+        _reject_same_priority_conflicts(guideline, ontology, derivations)
     else:
-        _reject_same_priority_conflicts_smt(guideline, ontology)
+        _reject_same_priority_conflicts_smt(guideline, ontology, derivations)
 
 
 def _validate_expression(
@@ -144,11 +152,20 @@ def _validate_expression(
 def _reject_same_priority_conflicts(
     guideline: Guideline,
     ontology: EvidenceOntology,
-    relevant: list[str],
+    derivations: DerivationGraph | None,
 ) -> None:
-    domains = [ontology.predicate(item).allowed_values for item in relevant]
+    predicates = sorted(ontology.predicates, key=lambda item: item.id)
+    domains = [item.allowed_values for item in predicates]
     for values in itertools.product(*domains):
-        state = EvidenceState(values=dict(zip(relevant, values, strict=True)))
+        state = EvidenceState(
+            values={item.id: value for item, value in zip(predicates, values, strict=True)}
+        )
+        from g2lc.ontology.feasibility import is_feasible_state
+
+        if not is_feasible_state(state, ontology, complete=True):
+            continue
+        if derivations is not None and not derivations_consistent(state, derivations):
+            continue
         triggered = [
             rule
             for rule in guideline.rules
@@ -210,6 +227,7 @@ def _expression_to_z3(
 def _reject_same_priority_conflicts_smt(
     guideline: Guideline,
     ontology: EvidenceOntology,
+    derivations: DerivationGraph | None,
 ) -> None:
     variables = {item.id: z3.Int(f"validation__{item.id}") for item in ontology.predicates}
     indices = {
@@ -222,6 +240,22 @@ def _reject_same_priority_conflicts_smt(
         base.add(variables[predicate.id] >= 0)
         base.add(variables[predicate.id] < len(predicate.allowed_values))
     base.add(*feasibility_constraints_z3(ontology, variables, indices))
+    if derivations is not None:
+        for rule in derivations.rules:
+            source_id = rule.input_predicates[0]
+            target_id = rule.output_predicates[0]
+            for source_index, source_value in enumerate(
+                ontology.predicate(source_id).allowed_values
+            ):
+                base.add(
+                    z3.Implies(
+                        variables[source_id] == source_index,
+                        variables[target_id]
+                        == indices[target_id][
+                            scalar_key(rule.value_mapping[scalar_key(source_value)])
+                        ],
+                    )
+                )
     for left_index, left in enumerate(guideline.rules):
         for right in guideline.rules[left_index + 1 :]:
             if left.priority != right.priority or left.action == right.action:

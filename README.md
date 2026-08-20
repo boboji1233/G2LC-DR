@@ -12,14 +12,14 @@ future guidelines, or treat an LLM as clinical ground truth. The first release i
 synthetic, executable verification slice; its rules and relative costs are development
 fixtures, not validated clinical thresholds or experimental results.
 
-Stage 1.5 proves decision sufficiency only under the declared finite evidence,
+Stage 1.6 hardens decision sufficiency only under the declared finite evidence,
 feasibility, derivation, modality, and guideline semantics. A decision is the canonical
 set of possible actions only; matched clauses and other traces are audit data and never
 create separation obligations.
 
 ## Five-minute synthetic demo
 
-Prerequisites are Python 3.11 and `uv`.
+Prerequisites are Python 3.11 or 3.12 and `uv`.
 
 ```bash
 uv sync
@@ -43,6 +43,7 @@ uv run g2lc synthetic run --fixture missing_evidence
 uv run g2lc synthetic run --fixture out_of_spec
 uv run pytest -q
 make stage1-5-gate
+make stage1-6-gate
 make review-bundle
 ```
 
@@ -73,7 +74,9 @@ A certificate is not accepted on solver authority alone. The independent
 writer helpers, checks content and source hashes, and recomputes EXECUTABLE, INCOMPLETE,
 or OUT_OF_SPEC claims. Schema 1.1 records the semantic contract, proof scope,
 feasibility/decision hashes, prerequisite closure, exact objective tuple, and explicit
-optimality tiers.
+optimality tiers. Stage 1.6 additionally records a nonempty evidence-language witness,
+the decision-relevant predicate closure, and action distinctions rather than claiming
+that every clause was independently "covered".
 
 ## Data access and reproducibility
 
@@ -86,6 +89,6 @@ Generated medical images, raw/interim/processed data and model checkpoints are e
 from Git. Contributions that add guideline clauses must include provenance, version,
 review status, boundary tests and an impact diff.
 
-The authoritative Stage-1.5 outcome is
-`artifacts/audit/stage1_5/gate.json`. Real-data parsing, Oracle experiments, and visual
+The authoritative Stage-1.6 outcome is
+`artifacts/audit/stage1_6/gate.json`. Real-data parsing, Oracle experiments, and visual
 model work remain frozen in this session regardless of the synthetic software gate.

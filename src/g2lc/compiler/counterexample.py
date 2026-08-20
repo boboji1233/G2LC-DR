@@ -14,6 +14,7 @@ from g2lc.compiler.result import (
     SolverKind,
     SolverStatus,
 )
+from g2lc.errors import CompilationError
 from g2lc.guidelines.ast import (
     And,
     Equals,
@@ -343,11 +344,25 @@ def find_counterexample(
     left_state = state_from(left)
     right_state = state_from(right)
     left_actions = {
-        guideline.id: action_signature(evaluate_guideline(guideline, left_state, problem.ontology))
+        guideline.id: action_signature(
+            evaluate_guideline(
+                guideline,
+                left_state,
+                problem.ontology,
+                derivations=problem.graph,
+            )
+        )
         for guideline in problem.guidelines
     }
     right_actions = {
-        guideline.id: action_signature(evaluate_guideline(guideline, right_state, problem.ontology))
+        guideline.id: action_signature(
+            evaluate_guideline(
+                guideline,
+                right_state,
+                problem.ontology,
+                derivations=problem.graph,
+            )
+        )
         for guideline in problem.guidelines
     }
     differing = sorted(
@@ -361,6 +376,53 @@ def find_counterexample(
         differing_guidelines=differing,
         left_actions={item: left_actions[item] for item in differing},
         right_actions={item: right_actions[item] for item in differing},
+    )
+
+
+def find_feasible_state(problem: LoadedCompilerProblem) -> EvidenceState | None:
+    """Return one legal complete evidence state, or ``None`` for an empty language."""
+
+    variables = {
+        predicate.id: z3.Int(f"witness__{predicate.id}")
+        for predicate in problem.ontology.predicates
+    }
+    indices = _domain_index(problem)
+    solver = z3.Solver()
+    for predicate in problem.ontology.predicates:
+        solver.add(variables[predicate.id] >= 0)
+        solver.add(variables[predicate.id] < len(predicate.allowed_values))
+    solver.add(*_feasibility_constraints_z3(variables, problem, indices))
+    solver.add(*_derivation_constraints_z3(variables, problem, indices))
+    status = solver.check()
+    if status == z3.unknown:
+        raise CompilationError(
+            f"evidence-language satisfiability is unknown: {solver.reason_unknown()}"
+        )
+    if status != z3.sat:
+        return None
+    for predicate in sorted(problem.ontology.predicates, key=lambda item: item.id):
+        for index in range(len(predicate.allowed_values)):
+            solver.push()
+            solver.add(variables[predicate.id] == index)
+            candidate = solver.check()
+            solver.pop()
+            if candidate == z3.sat:
+                solver.add(variables[predicate.id] == index)
+                break
+        else:  # pragma: no cover - the already-satisfiable prefix has a value
+            raise CompilationError(
+                f"cannot construct canonical evidence witness for {predicate.id!r}"
+            )
+    if solver.check() != z3.sat:  # pragma: no cover - guarded by the prefix checks
+        raise CompilationError("canonical evidence witness unexpectedly became unsatisfiable")
+    model = solver.model()
+    return EvidenceState(
+        values={
+            predicate.id: predicate.allowed_values[
+                model.eval(variables[predicate.id], model_completion=True).as_long()
+            ]
+            for predicate in problem.ontology.predicates
+        }
     )
 
 
@@ -401,6 +463,8 @@ def solve_counterexample_separation(
 ) -> CompilerSolution:
     """Iteratively add Z3 counterexamples to a restricted CP-SAT master."""
 
+    if find_feasible_state(problem) is None:
+        raise CompilationError("UNSAT_EVIDENCE_LANGUAGE: no legal complete state exists")
     operators = problem.available_operators()
     constraints: list[set[str]] = []
     seen: set[str] = set()

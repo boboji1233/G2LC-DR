@@ -110,6 +110,15 @@ def _validate_feasibility(ontology: EvidenceOntology) -> None:
                     raise OntologyValidationError(
                         "derived_equality maps to an out-of-domain target value"
                     )
+            else:
+                missing_identity_values = [
+                    item for item in source_domain if not _in_domain(item, target_domain)
+                ]
+                if missing_identity_values:
+                    raise OntologyValidationError(
+                        "derived_equality identity mapping requires every typed source-domain "
+                        f"value in the target domain; missing={missing_identity_values!r}"
+                    )
         elif isinstance(constraint, ParentChildConstraint):
             unknown = sorted(
                 {constraint.parent_predicate, constraint.child_predicate} - predicates.keys()

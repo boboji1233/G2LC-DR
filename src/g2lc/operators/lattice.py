@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 from pydantic import ValidationError
 
 from g2lc.errors import OperatorValidationError
 from g2lc.ontology.models import EvidenceOntology
-from g2lc.operators.models import DerivationGraph, OperatorCatalogue
+from g2lc.operators.models import AnnotationOperator, DerivationGraph, OperatorCatalogue
 from g2lc.types import scalar_equal, scalar_key
 from g2lc.utils.io import load_yaml, validation_error
 
@@ -186,3 +187,41 @@ def derivation_closure(initial: set[str], graph: DerivationGraph) -> set[str]:
                 closure.update(rule.output_predicates)
                 changed = changed or len(closure) != before
     return closure
+
+
+def operator_prerequisite_closure(
+    selected_ids: Iterable[str],
+    operator_map: Mapping[str, AnnotationOperator],
+) -> tuple[str, ...]:
+    """Return the deterministic transitive prerequisite closure of a scheme.
+
+    Catalogue validation normally rejects missing prerequisites and cycles.  This
+    defensive boundary is shared by solvers, repairs, certificates, and audits so a
+    partially constructed in-memory problem cannot bypass those invariants.
+    """
+
+    closure: set[str] = set()
+    visiting: set[str] = set()
+
+    def visit(operator_id: str, trail: tuple[str, ...]) -> None:
+        if operator_id not in operator_map:
+            raise OperatorValidationError(
+                f"operator prerequisite closure references unknown operator {operator_id!r}"
+            )
+        if operator_id in visiting:
+            start = trail.index(operator_id)
+            cycle = (*trail[start:], operator_id)
+            raise OperatorValidationError(
+                f"cyclic operator prerequisite closure: {' -> '.join(cycle)}"
+            )
+        if operator_id in closure:
+            return
+        visiting.add(operator_id)
+        for required_id in sorted(operator_map[operator_id].required_operator_ids):
+            visit(required_id, (*trail, required_id))
+        visiting.remove(operator_id)
+        closure.add(operator_id)
+
+    for item in sorted(set(selected_ids)):
+        visit(item, (item,))
+    return tuple(sorted(closure))

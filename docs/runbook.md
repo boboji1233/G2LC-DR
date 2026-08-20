@@ -57,6 +57,22 @@ coverage JSON, solver equivalence, tamper results, and the final result under
 fixtures, documentation, CI configuration, and Stage-1.5 audit evidence; it excludes
 data, checkpoints, caches, and Git internals and emits a SHA-256 checksum.
 
+## 4a. Run the Stage-1.6 cross-path gate
+
+Run from a clean commit descended from `ec3250d…`:
+
+```bash
+uv run --python 3.11 python scripts/stage1_6_gate.py
+uv run --python 3.12 python scripts/stage1_6_gate.py
+uv run --python 3.12 g2lc audit stage1-6 --required-pythons 3.11,3.12 \
+  --output artifacts/audit/stage1_6/gate.json
+```
+
+The runner records each real exit code, branch-aware coverage, JUnit outcomes, package
+build, 20 cost perturbations, 200 varied semantic problems, tamper rejection, and bundle
+verification. It never inserts a synthetic successful exit code for its own audit step.
+The weekly/manual CI stress job expands the semantic generator to 2,000 cases.
+
 ## 5. Add a guideline safely
 
 1. Create a versioned YAML file; include official URL, section, effective date, modality,

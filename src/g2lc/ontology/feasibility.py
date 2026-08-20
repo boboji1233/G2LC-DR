@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
 
 import z3
 
@@ -19,6 +20,9 @@ from g2lc.ontology.models import (
     ParentChildConstraint,
 )
 from g2lc.types import EvidenceState, JsonScalar, scalar_equal, scalar_key
+
+if TYPE_CHECKING:
+    from g2lc.operators.models import DerivationGraph
 
 
 def _contains(values: list[JsonScalar], candidate: JsonScalar) -> bool:
@@ -107,6 +111,7 @@ def is_feasible_state(
 def feasible_completions(
     state: EvidenceState,
     ontology: EvidenceOntology,
+    derivations: DerivationGraph | None = None,
 ) -> Iterator[EvidenceState]:
     """Yield every feasible complete ontology state extending a validated partial state."""
 
@@ -120,7 +125,15 @@ def feasible_completions(
                 **{item.id: value for item, value in zip(missing, values, strict=True)},
             }
         )
-        if is_feasible_state(completion, ontology, complete=True):
+        if not is_feasible_state(completion, ontology, complete=True):
+            continue
+        if derivations is not None:
+            from g2lc.operators.derivation import derivations_consistent
+
+            if not derivations_consistent(completion, derivations):
+                continue
+            yield completion
+        else:
             yield completion
 
 

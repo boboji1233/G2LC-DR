@@ -98,6 +98,10 @@ def test_rehashed_semantic_hash_tamper_is_rejected(minimal_problem, tmp_path) ->
         "assumptions",
         "feasibility_hash",
         "decision_program_hash",
+        "evidence_language",
+        "relevant_predicates",
+        "relevant_predicate_closure_hash",
+        "semantic_generated_gate_passed",
         "selected_operators",
         "derived_predicates",
         "operator_closure",
@@ -109,7 +113,9 @@ def test_rehashed_semantic_hash_tamper_is_rejected(minimal_problem, tmp_path) ->
         "verification",
         "action_programs",
         "guidelines_covered",
-        "clauses_covered",
+        "decision_programs_covered",
+        "action_distinctions_covered",
+        "clauses_provenance",
         "source_hashes",
     ],
 )
@@ -122,19 +128,29 @@ def test_rehashed_substantive_tamper_matrix_rejected(
         data[field] = "BOUNDED"
     elif field == "assumptions":
         data[field] = []
-    elif field in {"feasibility_hash", "decision_program_hash"}:
+    elif field in {
+        "feasibility_hash",
+        "decision_program_hash",
+        "relevant_predicate_closure_hash",
+    }:
         data[field] = "0" * 64
     elif field in {
         "selected_operators",
         "derived_predicates",
         "guidelines_covered",
-        "clauses_covered",
+        "decision_programs_covered",
+        "clauses_provenance",
+        "relevant_predicates",
     }:
         data[field] = []
     elif field in {"operator_closure", "action_programs"}:
         data[field] = {}
-    elif field == "action_distinction_count":
+    elif field in {"action_distinction_count", "action_distinctions_covered"}:
         data[field] += 1
+    elif field == "evidence_language":
+        data[field]["witness_hash"] = "0" * 64
+    elif field == "semantic_generated_gate_passed":
+        data[field] = True
     elif field == "total_cost":
         data[field] = "999"
     elif field == "objective_tuple":

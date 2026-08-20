@@ -2,9 +2,25 @@
 
 Last updated: 2026-08-20 (Asia/Shanghai)
 
-Stage 1 functional prototype exists.
-Stage 1.5 semantic soundness gate is PASS in this checkout.
-Stage 2, Oracle, and visual training are frozen.
+Stage 1.6 cross-path hardening is implemented locally; its commit-bound dual-Python
+gate is the only authoritative acceptance record.
+Stage 2, Oracle, and visual training remain frozen.
+
+## Current Stage 1.6 scope
+
+- The work starts from verified commit `ec3250d7e3dba0379c3b5205949c23e4f4ee5d59`
+  on `codex/stage1-6-cross-path-hardening`.
+- Seven focused tests reproduced the audited residual defects before fixes; the
+  regression ledger is `artifacts/audit/stage1_6/regressions_before.json`.
+- Greedy selection now closes and pays prerequisites, finite conflict validation uses
+  feasibility and derivation semantics, empty evidence languages fail closed, partial
+  evaluation applies derivations, and repair uses CP-SAT with a bounded brute-force oracle.
+- Deterministic semantic generation varies predicates, guidelines, feasibility,
+  derivations, prerequisite graphs, and Decimal objectives; failures persist by seed.
+- Certificates now prove non-vacuity, bind the relevant-predicate closure, use
+  action-distinction terminology, and are checked by the import-isolated verifier.
+- Python 3.11/3.12 commands, coverage, 200-case semantic results, tamper results, and
+  bundle verification are reported only from `artifacts/audit/stage1_6/gate.json`.
 
 ## Current Stage 1.5 audit
 
@@ -14,12 +30,6 @@ Stage 2, Oracle, and visual training are frozen.
   incomplete priority semantics, untyped states, an unconstrained Cartesian state universe,
   structural-only derivations, unenforced operator prerequisites, rounded objectives,
   non-incremental repair accounting, and a verifier coupled to compiler internals.
-- The local Git repository has no `HEAD`; all files are currently untracked. The requested
-  baseline commit therefore cannot be verified in this checkout and will not be fabricated.
-- The first untouched test attempt, `uv run pytest -q`, exited 1 because `uv` is not on this
-  host's `PATH`. This is an environment failure, not a passing or failing test suite.
-- A temporary, pinned `uv 0.12.5` executable was installed under the host temporary
-  directory. The portable runner then completed every mandatory command with exit 0.
 - Final gate evidence: 188 tests, 0 failures; whole line/branch coverage
   92.4229%/85.6073%; core line/branch coverage 96.2706%/90.1015%; 20/20 seeded
   finite/brute-force/separation cases; 66/66 valid finite/Z3 schemes; 45/45 rehashed
@@ -52,14 +62,12 @@ feasibility, derivation, modality, and guideline semantics.
 
 ## Next dependency-satisfied tasks
 
-1. Review `artifacts/audit/stage1_5/gate.json` and the checksum-addressed Stage-1.5 bundle.
+1. Review `artifacts/audit/stage1_6/gate.json` and the commit-addressed Stage-1.6 bundle.
 2. Keep all Stage 2, real-data parsing, Oracle, and visual-model work frozen until a
    separately authorized task satisfies its own data, provenance, and scientific gates.
 
 ## Commands and exact outcomes
 
 The authoritative command ledger for this audit is generated under
-`artifacts/audit/stage1_5/`. Historical results formerly listed here are not treated as
-Stage 1.5 evidence because they were produced before the semantic contract was corrected.
-The final gate status is `PASS`; the repository has no commit/`HEAD`, so this result is
-bound to the recorded dirty checkout and fixture hashes rather than a fabricated commit.
+`artifacts/audit/stage1_6/`. Documentation never substitutes copied console text for the
+machine-readable, commit-bound gate.

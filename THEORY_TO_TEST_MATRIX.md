@@ -39,3 +39,19 @@ row complete until the referenced command has run successfully in the current ch
 The current checkout's gate is `PASS`: 188 tests passed, every coverage threshold was
 met, 20 seeded objective comparisons and 66 finite/Z3 scheme comparisons agreed, and all
 45 rehashed certificate mutations were rejected.
+
+## Stage 1.6 hardening matrix
+
+| Residual risk | Failing reproduction | Corrected paths | Acceptance evidence |
+|---|---|---|---|
+| Greedy omits prerequisite/cost | `test_greedy_selects_and_pays_direct_prerequisite` | greedy, dominance, certificate closure | selected closure and exact cost |
+| Finite conflict sees impossible overlap | `test_finite_conflict_validation_ignores_infeasible_overlap` | finite and SMT guideline validation | same feasibility/derivation context |
+| Empty state space passes vacuously | three `empty_evidence_language` tests | exact, greedy, separation, API, writer, verifier | explicit `UNSAT_EVIDENCE_LANGUAGE` |
+| Partial evaluation ignores derivation | `test_partial_evaluation_applies_derivations` | evaluator and all decision callers | impossible completion excluded |
+| Full Cartesian state blow-up | relevant projection regression | dependency closure and projected enumeration | exact optimum unchanged |
+| Repair brute force cannot scale | repair unit/property tests | CP-SAT plus <=18-operator oracle | fail closed above symbolic bound |
+| Cost-only random testing | generated semantic matrix | Python, finite, brute, CP-SAT, Z3, greedy, verifier | >=200 varied problems, zero mismatch |
+| Certificate wording/non-vacuity | rehashed tamper matrix | writer and independent raw verifier | nonempty witness and action distinctions |
+
+The current Stage-1.6 measurements are authoritative only in
+`artifacts/audit/stage1_6/gate.json`; this document contains no substituted PASS claim.

@@ -39,6 +39,14 @@ class OptimalityPayload(StrictModel):
     lexical_proven: bool = False
 
 
+class EvidenceLanguagePayload(StrictModel):
+    """A non-vacuity witness independently recomputable from source semantics."""
+
+    nonempty: Literal[True] = True
+    method: Literal["z3-sat"] = "z3-sat"
+    witness_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
 class CertificateBase(StrictModel):
     """Fields shared by all certificate outcomes."""
 
@@ -56,6 +64,10 @@ class CertificateBase(StrictModel):
     derivation_graph_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     feasibility_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     decision_program_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    evidence_language: EvidenceLanguagePayload
+    relevant_predicates: list[str]
+    relevant_predicate_closure_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    semantic_generated_gate_passed: bool | None = None
     selected_operators: list[str] = Field(default_factory=list)
     derived_predicates: list[str] = Field(default_factory=list)
     operator_closure: dict[str, list[str]]
@@ -71,11 +83,13 @@ class CertificateBase(StrictModel):
 
 
 class ExecutabilityCertificate(CertificateBase):
-    """A scheme asserted to execute every target guideline clause."""
+    """A scheme asserted to preserve every target decision distinction."""
 
     certificate_type: Literal["EXECUTABLE"] = "EXECUTABLE"
     guidelines_covered: list[str]
-    clauses_covered: list[str]
+    decision_programs_covered: list[str]
+    action_distinctions_covered: int = Field(ge=0)
+    clauses_provenance: list[str]
     action_programs: dict[str, list[str]]
 
 

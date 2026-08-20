@@ -1,0 +1,13 @@
+schema_version: '1.0'
+project_id: generated_0
+ontology: ontology.yaml
+guidelines:
+- guidelines.yaml
+operators: operators.yaml
+derivations: derivations.yaml
+target_modalities:
+- CFP
+instability_weight: '0.0'
+max_states: 128
+seed: 0
+output: certificate.json

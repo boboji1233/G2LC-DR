@@ -3,6 +3,9 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * 1"
 
 permissions:
   contents: read
@@ -21,10 +24,32 @@ jobs:
           version: "0.12.5"
           enable-cache: true
       - run: uv python install ${{ matrix.python-version }}
-      - run: uv sync --locked --all-groups
-      - run: uv run python scripts/stage1_5_gate.py
+      - run: uv sync --locked --all-groups --python ${{ matrix.python-version }}
+      - run: uv run --python ${{ matrix.python-version }} python scripts/stage1_6_gate.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: stage1-5-audit-py${{ matrix.python-version }}
-          path: artifacts/audit/stage1_5/
+          name: stage1-6-audit-py${{ matrix.python-version }}
+          path: |
+            artifacts/audit/stage1_6/
+            artifacts/review/G2LC_DR_STAGE1_6_REVIEW_*
+
+  semantic-stress:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.5"
+          enable-cache: true
+      - run: uv python install 3.12
+      - run: uv sync --locked --all-groups --python 3.12
+      - run: >-
+          uv run --python 3.12 g2lc synthetic matrix
+          --random-seeds 20 --semantic-generated-cases 2000 --json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: stage1-6-semantic-stress
+          path: artifacts/audit/stage1_6/

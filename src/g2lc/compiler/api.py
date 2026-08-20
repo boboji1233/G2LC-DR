@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from g2lc.compiler.counterexample import solve_counterexample_separation
+from g2lc.compiler.counterexample import find_feasible_state, solve_counterexample_separation
 from g2lc.compiler.exact import solve_exact
 from g2lc.compiler.greedy import solve_greedy
 from g2lc.compiler.problem import (
@@ -26,6 +26,12 @@ def compile_problem(
 ) -> CompilerSolution:
     """Compile a loaded project into a scientific outcome."""
 
+    if find_feasible_state(loaded) is None:
+        return CompilerSolution(
+            status=CompilerStatus.UNSAT_EVIDENCE_LANGUAGE,
+            solver=solver,
+            solver_status=SolverStatus.INFEASIBLE,
+        )
     issues = preflight_oos(loaded)
     if issues:
         return CompilerSolution(

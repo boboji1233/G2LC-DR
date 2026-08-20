@@ -54,6 +54,7 @@ def _tamper(data: dict[str, Any], field: str) -> None:
         "derivation_graph_hash",
         "feasibility_hash",
         "decision_program_hash",
+        "relevant_predicate_closure_hash",
     }:
         data[field] = "0" * 64
     elif field == "guideline_hashes":
@@ -63,13 +64,21 @@ def _tamper(data: dict[str, Any], field: str) -> None:
         "selected_operators",
         "derived_predicates",
         "guidelines_covered",
-        "clauses_covered",
+        "decision_programs_covered",
+        "clauses_provenance",
+        "relevant_predicates",
     }:
         data[field] = []
     elif field in {"operator_closure", "action_programs"}:
         data[field] = {}
     elif field == "action_distinction_count":
         data[field] = 0 if data[field] is None else data[field] + 1
+    elif field == "action_distinctions_covered":
+        data[field] += 1
+    elif field == "evidence_language":
+        data[field]["witness_hash"] = "0" * 64
+    elif field == "semantic_generated_gate_passed":
+        data[field] = True
     elif field == "total_cost":
         data[field] = "999"
     elif field == "objective_tuple":
@@ -138,6 +147,10 @@ def _tamper_matrix(problem_path: Path) -> dict[str, Any]:
                 "derivation_graph_hash",
                 "feasibility_hash",
                 "decision_program_hash",
+                "evidence_language",
+                "relevant_predicates",
+                "relevant_predicate_closure_hash",
+                "semantic_generated_gate_passed",
                 "selected_operators",
                 "derived_predicates",
                 "operator_closure",
@@ -150,7 +163,9 @@ def _tamper_matrix(problem_path: Path) -> dict[str, Any]:
                 "proof_method",
                 "action_programs",
                 "guidelines_covered",
-                "clauses_covered",
+                "decision_programs_covered",
+                "action_distinctions_covered",
+                "clauses_provenance",
                 "source_hashes",
             ],
         ),
@@ -186,6 +201,9 @@ def _tamper_matrix(problem_path: Path) -> dict[str, Any]:
                 "solver_status",
                 "action_programs",
                 "guidelines_covered",
+                "decision_programs_covered",
+                "action_distinctions_covered",
+                "clauses_provenance",
             ],
         ),
         (
@@ -239,7 +257,9 @@ def _tamper_matrix(problem_path: Path) -> dict[str, Any]:
     }
 
 
-def run_synthetic_matrix(*, random_seeds: int = 20) -> dict[str, Any]:
+def run_synthetic_matrix(
+    *, random_seeds: int = 20, semantic_generated_cases: int = 0
+) -> dict[str, Any]:
     """Compare every exact path on deterministic small synthetic instances."""
 
     problem_path = ROOT / "examples" / "synthetic" / "minimal_dr" / "project.yaml"
@@ -330,6 +350,13 @@ def run_synthetic_matrix(*, random_seeds: int = 20) -> dict[str, Any]:
         "verifier_independence_check": verifier,
         "tamper_matrix_results": tamper,
     }
+    if semantic_generated_cases:
+        from g2lc.audit.stage1_6 import run_semantic_generated_matrix
+
+        payload["semantic_generated_results"] = run_semantic_generated_matrix(
+            semantic_generated_cases
+        )
+        _write_json(ROOT / "artifacts" / "audit" / "stage1_6" / "solver_matrix.json", payload)
     _write_json(AUDIT_DIR / "solver_matrix.json", payload)
     return payload
 

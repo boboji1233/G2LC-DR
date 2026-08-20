@@ -64,7 +64,6 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 "tests/**/*.py" = ["S101"]
 
 [tool.mypy]
-python_version = "3.11"
 strict = true
 packages = ["g2lc"]
 mypy_path = "src"

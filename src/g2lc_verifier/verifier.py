@@ -146,6 +146,10 @@ def _states(
         state = {item["id"]: value for item, value in zip(predicates, values, strict=True)}
         if _feasible(ontology, state) and _derivations_consistent(graph, state):
             result.append(state)
+    if not result:
+        raise CertificateVerificationError(
+            "UNSAT_EVIDENCE_LANGUAGE: certificate cannot rely on an empty state space"
+        )
     return result
 
 
@@ -193,6 +197,73 @@ def _expression_predicates(raw: dict[str, Any]) -> set[str]:
     if key == "not":
         return _expression_predicates(payload)
     return {payload if key == "known" else payload[0]}
+
+
+def _constraint_predicates(raw: dict[str, Any]) -> set[str]:
+    kind = raw["kind"]
+    if kind == "implication":
+        return {raw["if"]["predicate"], raw["then"]["predicate"]}
+    if kind in {"mutual_exclusion", "at_most_one", "exactly_one"}:
+        return {item["predicate"] for item in raw["conditions"]}
+    if kind == "conditional_allowed":
+        return {raw["if"]["predicate"], raw["predicate"]}
+    if kind == "derived_equality":
+        return {raw["source_predicate"], raw["target_predicate"]}
+    if kind == "parent_child":
+        return {raw["parent_predicate"], raw["child_predicate"]}
+    raise CertificateVerificationError(f"unsupported feasibility kind {kind!r}")
+
+
+def _relevant_predicates(
+    ontology: dict[str, Any],
+    guidelines: list[dict[str, Any]],
+    operators: dict[str, Any],
+    graph: dict[str, Any],
+    required_ids: set[str] | None = None,
+) -> list[str]:
+    closure = set().union(
+        *(
+            _expression_predicates(rule["when"])
+            for guideline in guidelines
+            for rule in guideline["rules"]
+        )
+    )
+    operator_map = {item["id"]: item for item in operators["operators"]}
+    for operator_id in _operator_closure(required_ids or set(), operator_map):
+        required_operator = operator_map[operator_id]
+        closure.update(required_operator.get("output_predicates", []))
+        closure.update(
+            item["predicate_id"]
+            for item in required_operator.get("required_evidence_conditions", [])
+        )
+    changed = True
+    while changed:
+        before = set(closure)
+        for constraint in ontology.get("feasibility", {}).get("constraints", []):
+            predicates = _constraint_predicates(constraint)
+            if predicates & closure:
+                closure.update(predicates)
+        for rule in graph.get("rules", []):
+            predicates = set(rule["input_predicates"]) | set(rule["output_predicates"])
+            if predicates & closure:
+                closure.update(predicates)
+        for operator in operators["operators"]:
+            if not set(operator.get("output_predicates", [])) & closure:
+                continue
+            closure.update(
+                item["predicate_id"] for item in operator.get("required_evidence_conditions", [])
+            )
+            for prerequisite_id in _operator_closure(
+                set(operator.get("required_operator_ids", [])), operator_map
+            ):
+                prerequisite = operator_map[prerequisite_id]
+                closure.update(prerequisite.get("output_predicates", []))
+                closure.update(
+                    item["predicate_id"]
+                    for item in prerequisite.get("required_evidence_conditions", [])
+                )
+        changed = closure != before
+    return sorted(closure)
 
 
 def _reference_clauses(guidelines: list[dict[str, Any]]) -> dict[str, list[str]]:
@@ -663,6 +734,41 @@ def _z3_derivations(
     return result
 
 
+def _canonical_evidence_witness(
+    ontology: dict[str, Any], graph: dict[str, Any]
+) -> dict[str, Any] | None:
+    domains = _z3_domains(ontology)
+    predicate_map = {item["id"]: item for item in ontology["predicates"]}
+    variables = {item: z3.Int(f"witness__{item}") for item in sorted(domains)}
+    solver = z3.Solver()
+    for predicate, domain in domains.items():
+        solver.add(variables[predicate] >= 0, variables[predicate] < len(domain))
+    solver.add(*_z3_feasibility(ontology, variables, domains))
+    solver.add(*_z3_derivations(graph, variables, domains))
+    if solver.check() != z3.sat:
+        return None
+    for predicate in sorted(domains):
+        for index in range(len(domains[predicate])):
+            solver.push()
+            solver.add(variables[predicate] == index)
+            candidate = solver.check()
+            solver.pop()
+            if candidate == z3.sat:
+                solver.add(variables[predicate] == index)
+                break
+        else:  # pragma: no cover - satisfiable prefix guarantees a value
+            raise CertificateVerificationError("canonical witness construction failed")
+    if solver.check() != z3.sat:  # pragma: no cover - guarded above
+        raise CertificateVerificationError("canonical witness became unsatisfiable")
+    model = solver.model()
+    return {
+        predicate: predicate_map[predicate]["allowed_values"][
+            model.eval(variables[predicate], model_completion=True).as_long()
+        ]
+        for predicate in sorted(domains)
+    }
+
+
 def _z3_decision(
     guideline: dict[str, Any],
     variables: dict[str, z3.ArithRef],
@@ -844,6 +950,7 @@ def verify_certificate(path: str | Path) -> VerificationReport:
         "None alone denotes unknown evidence",
         "typed scalar identity distinguishes booleans, integers, numbers, and strings",
         "only declared feasibility and deterministic unary derivations constrain states",
+        "the evidence language contains at least one legal complete state",
         "synthetic fixtures are not clinical rules or measured costs",
     ]
     if certificate.get("assumptions") != expected_assumptions:
@@ -895,6 +1002,33 @@ def verify_certificate(path: str | Path) -> VerificationReport:
     ):
         raise CertificateVerificationError("semantic hash payload mismatch")
     checks.append("semantic_hashes")
+
+    witness = _canonical_evidence_witness(ontology, graph)
+    if witness is None:
+        raise CertificateVerificationError(
+            "UNSAT_EVIDENCE_LANGUAGE: certificate cannot rely on an empty state space"
+        )
+    expected_language = {
+        "nonempty": True,
+        "method": "z3-sat",
+        "witness_hash": _json_hash(witness),
+    }
+    if certificate.get("evidence_language") != expected_language:
+        raise CertificateVerificationError("evidence-language non-vacuity payload mismatch")
+    relevant = _relevant_predicates(
+        ontology,
+        guidelines,
+        operators,
+        graph,
+        set(project.get("required_operators", [])),
+    )
+    if (
+        certificate.get("relevant_predicates") != relevant
+        or certificate.get("relevant_predicate_closure_hash") != _json_hash(relevant)
+        or certificate.get("semantic_generated_gate_passed") is not None
+    ):
+        raise CertificateVerificationError("relevant predicate closure payload mismatch")
+    checks.extend(["evidence_language_nonempty", "relevant_predicate_closure"])
 
     operator_map = {item["id"]: item for item in operators["operators"]}
     available = _available(project, operators, include_repair=False)
@@ -998,7 +1132,9 @@ def verify_certificate(path: str | Path) -> VerificationReport:
             if (
                 certificate["action_programs"] != expected_programs
                 or certificate["guidelines_covered"] != expected_guidelines
-                or certificate["clauses_covered"] != expected_clauses
+                or certificate["decision_programs_covered"] != expected_guidelines
+                or certificate["action_distinctions_covered"] != 0
+                or certificate["clauses_provenance"] != expected_clauses
             ):
                 raise CertificateVerificationError("action program payload mismatch")
             if not selected_set.issubset(available) or not _scheme_valid(
@@ -1167,7 +1303,9 @@ def verify_certificate(path: str | Path) -> VerificationReport:
         if (
             certificate["action_programs"] != expected_programs
             or certificate["guidelines_covered"] != expected_guidelines
-            or certificate["clauses_covered"] != expected_clauses
+            or certificate["decision_programs_covered"] != expected_guidelines
+            or certificate["action_distinctions_covered"] != distinctions
+            or certificate["clauses_provenance"] != expected_clauses
         ):
             raise CertificateVerificationError("action program payload mismatch")
         if not selected_set.issubset(available) or not _scheme_valid(selected_set, operator_map):
