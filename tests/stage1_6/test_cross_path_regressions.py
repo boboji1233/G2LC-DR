@@ -158,6 +158,8 @@ def test_empty_evidence_language_is_never_executable(minimal_problem, solver: So
     assert solution.status.value == "UNSAT_EVIDENCE_LANGUAGE"
     with pytest.raises(CompilationError, match="UNSAT_EVIDENCE_LANGUAGE"):
         build_finite_problem(problem)
+    with pytest.raises(CompilationError, match="cannot be certified"):
+        build_certificate(problem, solution)
 
 
 def test_partial_evaluation_applies_deterministic_derivation(minimal_problem) -> None:  # type: ignore[no-untyped-def]
@@ -306,6 +308,16 @@ def test_relevant_state_projection_preserves_exact_optimum(minimal_problem) -> N
         full.selected_operators,
         full.total_cost,
     )
+
+
+def test_relevant_projection_fails_closed_above_limit(minimal_problem) -> None:  # type: ignore[no-untyped-def]
+    problem = replace(
+        minimal_problem,
+        config=minimal_problem.config.model_copy(update={"max_states": 1}),
+    )
+
+    with pytest.raises(CompilationError, match="relevant finite state space"):
+        enumerate_relevant_states(problem)
 
 
 @pytest.mark.parametrize("seed", [0, 3])

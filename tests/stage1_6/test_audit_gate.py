@@ -5,7 +5,11 @@ import sys
 from pathlib import Path
 
 import g2lc.audit.stage1_6 as audit
-from g2lc.audit.stage1_6 import generate_gate, run_semantic_generated_matrix
+from g2lc.audit.stage1_6 import (
+    generate_gate,
+    run_semantic_generated_matrix,
+    write_semantic_matrix,
+)
 
 
 def _write_json(path: Path, payload: object) -> None:
@@ -22,6 +26,15 @@ def test_generated_semantic_matrix_varies_and_agrees() -> None:
     assert any(item["feasibility_constraint_count"] for item in result["cases"])
     assert any(item["derivation_rule_count"] for item in result["cases"])
     assert any(item["prerequisite_edge_count"] for item in result["cases"])
+
+
+def test_semantic_matrix_writer_records_reproduction(tmp_path: Path) -> None:
+    path = tmp_path / "matrix.json"
+
+    result = write_semantic_matrix(path, 1)
+
+    assert result["passed"] is True
+    assert json.loads(path.read_text(encoding="utf-8"))["semantic_generated_cases"] == 1
 
 
 def test_gate_aggregates_only_recorded_evidence(tmp_path: Path, monkeypatch) -> None:  # type: ignore[no-untyped-def]
