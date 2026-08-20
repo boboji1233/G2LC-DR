@@ -1,0 +1,9 @@
+schema_version: "1.0"
+catalogue_id: synthetic_oos_operators
+version: "1.0.0-synthetic"
+synthetic: true
+provenance: {source: "G2LC synthetic fixture C", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+operators:
+  - {id: quality_label, name: Quality label, output_predicates: [gradable], granularity: QUALITY, modalities: [CFP], cost: 0.5, instability: 0.0, provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}}
+  - {id: oct_thickness_measurement, name: OCT thickness measurement, output_predicates: [oct_central_thickness], granularity: SPATIAL, modalities: [OCT], cost: 2.0, instability: 0.0, availability: UNAVAILABLE, provenance: {source: "synthetic OOS injection", version: "1.0.0-synthetic", review_status: SYNTHETIC}}
+

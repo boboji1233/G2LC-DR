@@ -1,0 +1,23 @@
+schema_version: "1.0"
+ontology_id: g2lc_dr_declared_evidence_v1
+version: "0.1.0-draft"
+description: "Draft image-observable ontology seed; no clinical rule validation is implied."
+provenance:
+  source: "G2LC-DR research plan ontology seed"
+  version: "0.1.0-draft"
+  review_status: DRAFT
+  note: "Must receive source and clinician review before production guideline use."
+predicates:
+  - id: gradable
+    name: Gradable image
+    description: "Whether the required retinal field can be interpreted from the image."
+    value_type: CATEGORICAL
+    allowed_values: ["no", "yes"]
+    modalities: [CFP, UWF]
+    observability: IMAGE_OBSERVABLE
+    recommended_operators: [quality_label]
+    provenance:
+      source: "G2LC-DR research plan §9.1"
+      version: "0.1.0-draft"
+      review_status: DRAFT
+

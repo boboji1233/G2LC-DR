@@ -1,0 +1,22 @@
+schema_version: "1.0"
+synthetic: true
+guidelines:
+  - id: synthetic_missing_nv_guideline
+    version: "1.0.0-synthetic"
+    effective_date: "not-clinical"
+    modality_scope: [CFP]
+    action_schema: [decision]
+    provenance: {source: "G2LC synthetic fixture B", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+    rules:
+      - id: ungradable_reshoot
+        priority: 100
+        when: {eq: [gradable, "no"]}
+        then: {decision: reshoot}
+        provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+      - id: nv_urgent
+        priority: 90
+        when: {eq: [nv_presence, present]}
+        then: {decision: urgent}
+        provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+    default_action: {decision: routine}
+

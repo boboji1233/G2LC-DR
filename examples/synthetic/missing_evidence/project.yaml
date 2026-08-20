@@ -1,0 +1,11 @@
+schema_version: "1.0"
+project_id: synthetic_missing_evidence
+ontology: ontology.yaml
+guidelines: [guidelines.yaml]
+operators: operators.yaml
+derivations: derivations.yaml
+target_modalities: [CFP]
+max_states: 1000
+seed: 42
+output: ../../../artifacts/synthetic/missing_evidence/certificate.json
+

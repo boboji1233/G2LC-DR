@@ -1,0 +1,9 @@
+schema_version: "1.0"
+graph_id: synthetic_minimal_dr_derivations
+version: "1.0.0-synthetic"
+provenance:
+  source: "G2LC synthetic fixture A"
+  version: "1.0.0-synthetic"
+  review_status: SYNTHETIC
+rules: []
+

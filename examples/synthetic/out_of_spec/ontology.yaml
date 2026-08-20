@@ -1,0 +1,17 @@
+schema_version: "1.0"
+ontology_id: synthetic_oos_evidence
+version: "1.0.0-synthetic"
+description: "Fixture C declares OCT evidence outside a CFP-only target."
+provenance: {source: "G2LC synthetic fixture C", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+predicates:
+  - {id: gradable, name: Gradable, description: "Synthetic quality evidence.", value_type: CATEGORICAL, allowed_values: ["no", "yes"], modalities: [CFP], observability: IMAGE_OBSERVABLE, recommended_operators: [quality_label], provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}}
+  - id: oct_central_thickness
+    name: OCT central thickness
+    description: "Synthetic numeric OCT-only predicate used to test OOS rejection."
+    value_type: INTEGER
+    allowed_values: [200, 300]
+    modalities: [OCT]
+    observability: IMAGE_OBSERVABLE
+    recommended_operators: [oct_thickness_measurement]
+    provenance: {source: "synthetic OOS injection", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+

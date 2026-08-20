@@ -1,0 +1,9 @@
+schema_version: "1.0"
+graph_id: g2lc_dr_derivation_graph_v1
+version: "0.1.0-draft"
+provenance:
+  source: "G2LC-DR research plan §10.1"
+  version: "0.1.0-draft"
+  review_status: DRAFT
+rules: []
+

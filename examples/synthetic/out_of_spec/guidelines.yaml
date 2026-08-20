@@ -1,0 +1,17 @@
+schema_version: "1.0"
+synthetic: true
+guidelines:
+  - id: synthetic_oct_guideline
+    version: "1.0.0-synthetic"
+    effective_date: "not-clinical"
+    modality_scope: [CFP, OCT]
+    action_schema: [decision]
+    provenance: {source: "G2LC synthetic fixture C", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+    rules:
+      - id: thickness_action
+        priority: 50
+        when: {gte: [oct_central_thickness, 300]}
+        then: {decision: synthetic_oct_action}
+        provenance: {source: "synthetic OOS injection", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+    default_action: {decision: routine}
+

@@ -1,0 +1,12 @@
+schema_version: "1.0"
+project_id: synthetic_minimal_dr
+ontology: ontology.yaml
+guidelines: [guidelines.yaml]
+operators: operators.yaml
+derivations: derivations.yaml
+target_modalities: [CFP]
+instability_weight: 0.0
+max_states: 1000
+seed: 42
+output: ../../../artifacts/synthetic/minimal_dr/certificate.json
+

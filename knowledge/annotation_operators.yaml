@@ -1,0 +1,23 @@
+schema_version: "1.0"
+catalogue_id: g2lc_dr_operator_catalogue_v1
+version: "0.1.0-draft"
+synthetic: false
+provenance:
+  source: "G2LC-DR research plan §10"
+  version: "0.1.0-draft"
+  review_status: DRAFT
+  note: "Costs are intentionally absent from clinical use; this seed is not an experiment."
+operators:
+  - id: quality_label
+    name: Image gradability label
+    output_predicates: [gradable]
+    granularity: QUALITY
+    modalities: [CFP, UWF]
+    cost: 1.0
+    instability: 0.0
+    provenance:
+      source: "development placeholder relative cost"
+      version: "0.1.0-draft"
+      review_status: DRAFT
+      note: "Relative development cost only; not measured annotation time."
+

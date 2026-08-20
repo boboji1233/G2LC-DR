@@ -1,0 +1,79 @@
+schema_version: "1.0"
+synthetic: true
+guidelines:
+  - id: synthetic_guideline_one
+    version: "1.0.0-synthetic"
+    effective_date: "not-clinical"
+    modality_scope: [CFP]
+    action_schema: [decision]
+    provenance:
+      source: "G2LC synthetic fixture A guideline 1"
+      version: "1.0.0-synthetic"
+      review_status: SYNTHETIC
+      note: "Not derived from or validated against a clinical guideline."
+    rules:
+      - id: ungradable_reshoot
+        priority: 100
+        when: {eq: [gradable, "no"]}
+        then: {decision: reshoot}
+        provenance:
+          source: "G2LC synthetic fixture A clause"
+          version: "1.0.0-synthetic"
+          review_status: SYNTHETIC
+      - id: high_hem_referral
+        priority: 80
+        when: {eq: [hem_count_bin, "4_plus"]}
+        then: {decision: refer}
+        provenance:
+          source: "G2LC synthetic fixture A clause"
+          version: "1.0.0-synthetic"
+          review_status: SYNTHETIC
+      - id: low_burden_monitor
+        priority: 60
+        when:
+          any:
+            - {eq: [ma_presence, present]}
+            - {eq: [hem_count_bin, "1_3"]}
+        then: {decision: monitor}
+        provenance:
+          source: "G2LC synthetic fixture A clause"
+          version: "1.0.0-synthetic"
+          review_status: SYNTHETIC
+    default_action: {decision: routine}
+  - id: synthetic_guideline_two
+    version: "1.0.0-synthetic"
+    effective_date: "not-clinical"
+    modality_scope: [CFP]
+    action_schema: [decision]
+    provenance:
+      source: "G2LC synthetic fixture A guideline 2"
+      version: "1.0.0-synthetic"
+      review_status: SYNTHETIC
+      note: "Not derived from or validated against a clinical guideline."
+    rules:
+      - id: ungradable_reshoot
+        priority: 100
+        when: {eq: [gradable, "no"]}
+        then: {decision: reshoot}
+        provenance:
+          source: "G2LC synthetic fixture A clause"
+          version: "1.0.0-synthetic"
+          review_status: SYNTHETIC
+      - id: nv_urgent
+        priority: 90
+        when: {eq: [nv_presence, present]}
+        then: {decision: urgent}
+        provenance:
+          source: "G2LC synthetic fixture A clause"
+          version: "1.0.0-synthetic"
+          review_status: SYNTHETIC
+      - id: any_hem_referral
+        priority: 60
+        when: {in: [hem_count_bin, ["1_3", "4_plus"]]}
+        then: {decision: refer}
+        provenance:
+          source: "G2LC synthetic fixture A clause"
+          version: "1.0.0-synthetic"
+          review_status: SYNTHETIC
+    default_action: {decision: routine}
+

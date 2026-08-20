@@ -1,0 +1,10 @@
+dataset_id,source_url,license,access_type,redistribution_allowed,commercial_use,downloaded_at,approval_status,source_family
+ddr,https://github.com/nkicsl/DDR-dataset,verify-from-source,official-link,false,verify,false,not_downloaded,OIA_DDR
+mmrdr,https://figshare.com/articles/dataset/MMRDR/29423747,verify-from-source,public,false,verify,false,not_downloaded,OIA_DDR
+idrid,https://idrid.grand-challenge.org/Data/,verify-from-source,registration,false,verify,false,not_downloaded,IDRID
+deepdrid,https://github.com/deepdrdoc/DeepDRiD,CC-BY-SA-4.0,public,verify,verify,false,not_downloaded,DEEPDRID
+fgadr,https://csyizhou.github.io/FGADR/,research-use-agreement,request,false,false,false,not_requested,FGADR
+maples_dr,https://figshare.com/articles/dataset/24328660,verify-from-source,public-labels,false,verify,false,not_downloaded,MESSIDOR1
+messidor1,https://www.adcis.net/en/third-party/messidor/,research-request,request,false,verify,false,not_requested,MESSIDOR1
+retinal_lesions,https://github.com/WeiQijie/retinal-lesions,verify-from-source,request,false,verify,false,not_requested,EYEPACS_RLDR
+

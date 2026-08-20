@@ -1,0 +1,62 @@
+schema_version: "1.0"
+ontology_id: synthetic_minimal_dr_evidence
+version: "1.0.0-synthetic"
+description: "Development-only finite DR-like evidence language; not a clinical ontology."
+provenance:
+  source: "G2LC synthetic fixture A"
+  version: "1.0.0-synthetic"
+  review_status: SYNTHETIC
+  note: "Domains are chosen only to test compiler semantics."
+predicates:
+  - id: gradable
+    name: Gradable image
+    description: "Synthetic image-quality evidence."
+    value_type: CATEGORICAL
+    allowed_values: ["no", "yes"]
+    modalities: [CFP]
+    observability: IMAGE_OBSERVABLE
+    recommended_operators: [quality_label]
+    provenance:
+      source: "G2LC synthetic fixture A"
+      version: "1.0.0-synthetic"
+      review_status: SYNTHETIC
+  - id: ma_presence
+    name: MA presence
+    description: "Synthetic microaneurysm presence evidence."
+    value_type: CATEGORICAL
+    allowed_values: [absent, present]
+    modalities: [CFP]
+    observability: IMAGE_OBSERVABLE
+    requires: [gradable]
+    recommended_operators: [ma_presence_label]
+    provenance:
+      source: "G2LC synthetic fixture A"
+      version: "1.0.0-synthetic"
+      review_status: SYNTHETIC
+  - id: hem_count_bin
+    name: Hemorrhage count bin
+    description: "Synthetic ordinal burden with deliberately non-clinical bin names."
+    value_type: ORDINAL
+    allowed_values: ["0", "1_3", "4_plus"]
+    modalities: [CFP]
+    observability: IMAGE_OBSERVABLE
+    requires: [gradable]
+    recommended_operators: [hem_count_bin_label, hem_full_mask]
+    provenance:
+      source: "G2LC synthetic fixture A"
+      version: "1.0.0-synthetic"
+      review_status: SYNTHETIC
+  - id: nv_presence
+    name: NV presence
+    description: "Synthetic neovascularization presence evidence."
+    value_type: CATEGORICAL
+    allowed_values: [absent, present]
+    modalities: [CFP]
+    observability: IMAGE_OBSERVABLE
+    requires: [gradable]
+    recommended_operators: [nv_presence_label]
+    provenance:
+      source: "G2LC synthetic fixture A"
+      version: "1.0.0-synthetic"
+      review_status: SYNTHETIC
+

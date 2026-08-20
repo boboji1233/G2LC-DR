@@ -1,0 +1,75 @@
+schema_version: "1.0"
+catalogue_id: synthetic_minimal_dr_operators
+version: "1.0.0-synthetic"
+synthetic: true
+provenance:
+  source: "G2LC synthetic fixture A"
+  version: "1.0.0-synthetic"
+  review_status: SYNTHETIC
+  note: "Relative costs are test constants, not measured annotation time."
+operators:
+  - id: image_level_grade
+    name: Legacy image-level grade only
+    output_predicates: []
+    granularity: IMAGE_GRADE
+    modalities: [CFP]
+    cost: 0.25
+    instability: 0.0
+    provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+  - id: ma_presence_label
+    name: MA presence label
+    output_predicates: [ma_presence]
+    granularity: PRESENCE
+    modalities: [CFP]
+    cost: 1.0
+    instability: 0.0
+    prerequisites: [gradable]
+    provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+  - id: hem_presence_label
+    name: Hemorrhage presence label
+    output_predicates: [hem_count_bin]
+    granularity: PRESENCE
+    modalities: [CFP]
+    cost: 0.8
+    instability: 0.0
+    prerequisites: [gradable]
+    value_mappings:
+      hem_count_bin: {"0": absent, "1_3": present, "4_plus": present}
+    provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+  - id: hem_count_bin_label
+    name: Hemorrhage count-bin label
+    output_predicates: [hem_count_bin]
+    granularity: COUNT_BIN
+    modalities: [CFP]
+    cost: 2.0
+    instability: 0.0
+    prerequisites: [gradable]
+    provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+  - id: nv_presence_label
+    name: NV presence label
+    output_predicates: [nv_presence]
+    granularity: PRESENCE
+    modalities: [CFP]
+    cost: 1.5
+    instability: 0.0
+    prerequisites: [gradable]
+    provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+  - id: hem_full_mask
+    name: Full hemorrhage mask deriving count burden
+    output_predicates: []
+    granularity: PIXEL_MASK
+    modalities: [CFP]
+    cost: 5.0
+    instability: 0.0
+    prerequisites: [gradable]
+    derivable_outputs: [hem_count_bin]
+    provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+  - id: quality_label
+    name: Image quality label
+    output_predicates: [gradable]
+    granularity: QUALITY
+    modalities: [CFP]
+    cost: 0.5
+    instability: 0.0
+    provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
+

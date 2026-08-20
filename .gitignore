@@ -1,0 +1,39 @@
+# Python and local tools
+.venv/
+.tools/
+.python/
+.uv-cache/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Medical data, derived images, and checkpoints
+data/raw/**
+data/interim/**
+data/processed/**
+!data/raw/.gitkeep
+!data/interim/.gitkeep
+!data/processed/.gitkeep
+*.ckpt
+*.pth
+*.pt
+*.onnx
+
+# Runs and generated artifacts (retain directory markers and committed examples)
+runs/**
+!runs/.gitkeep
+artifacts/**
+!artifacts/.gitkeep
