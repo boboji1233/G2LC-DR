@@ -16,6 +16,9 @@ listed acceptance checks pass.
   `OIA_DDR` (§8.6–§8.7, §18.1).
 - Oracle gates precede visual-model and real-data experiment work (§13, Gate E).
 
+Stage 1.5 proves decision sufficiency only under the declared finite evidence,
+feasibility, derivation, modality, and guideline semantics.
+
 ## Module-to-plan mapping
 
 | Module or artifact | Research-plan task/section | Deliverable and acceptance |
@@ -45,9 +48,10 @@ listed acceptance checks pass.
 | `src/g2lc/compiler/result.py` | D-03–D-05, §11.3 | Typed deterministic solver results |
 | `src/g2lc/certificates/models.py` | D-05, §11.6–§11.8 | EXECUTABLE/INCOMPLETE/OUT_OF_SPEC schemas |
 | `src/g2lc/certificates/writer.py` | D-05, §11.8, WP0 | Canonical deterministic JSON and hashes |
-| `src/g2lc/certificates/verifier.py` | D-05, §11.8, P0 | Re-load inputs; independently check soundness/optimum |
+| `src/g2lc_verifier/verifier.py` | D-05, §11.8, P0 | Import-isolated raw-source recomputation of all certificate outcomes |
+| `src/g2lc/certificates/verifier.py` | D-05, §11.8, P0 | Compatibility export only; no verification implementation |
 | `src/g2lc/cli.py` | §7.4, launch objective §11 | Required validation/compile/certificate/synthetic CLI |
-| `examples/synthetic/*` | EX00, P0, launch objective §10 | Minimal, missing-evidence, and OOS fixtures |
+| `examples/synthetic/*` | EX00, P0, launch objective §10 | Minimal, missing-evidence, OOS, and Stage-1.5 fixture matrix |
 | `tests/unit`, `tests/guidelines` | C-04, D Gate, §12 | At least 30 focused unit and 10 semantics tests |
 | `tests/property` | C-04, D Gate, §12 | At least 10 Hypothesis properties |
 | `src/g2lc/data/manifest.py`, `labels.py` | A-03/F-01, §8.1–§8.2 | Typed metadata and POSITIVE/NEGATIVE/UNKNOWN |
@@ -72,11 +76,16 @@ listed acceptance checks pass.
    Gate D: fixtures, tamper tests, properties, deterministic output pass.
 4. **Stage 1D — interface/docs:** CLI, synthetic demo, README/runbook, CI and
    coverage. Gate: every command in the first-run acceptance block passes.
-5. **Stage 2 — data metadata only (A-02/A-03/F-01):** begins only after the
-   Stage 1 gate. Missing gated datasets remain `BLOCKED`; no synthetic substitute.
-6. **Stage 3 — Oracle (E-01–E-04):** begins only after legal data access and split
+5. **Stage 1.5 — semantic soundness:** action-only decisions, finite/SMT feasibility,
+   deterministic derivations, prerequisites, exact objectives, incremental repair,
+   independent certificate verification, tamper rejection, branch coverage, and a
+   reproducible review bundle. Gate: `artifacts/audit/stage1_5/gate.json` is `PASS`.
+6. **Stage 2 — data metadata only (A-02/A-03/F-01):** remains frozen for this task;
+   later work also requires explicit authorization and legal local inputs. Missing gated
+   datasets remain `BLOCKED`; no synthetic substitute.
+7. **Stage 3 — Oracle (E-01–E-04):** begins only after legal data access and split
    locks. Gate E determines whether any visual model work is scientifically valid.
-7. **Later stages F–I:** visual evidence, baselines, experiments and paper outputs
+8. **Later stages F–I:** visual evidence, baselines, experiments and paper outputs
    remain out of scope until preceding gates pass.
 
 ## First vertical-slice acceptance
@@ -90,3 +99,25 @@ uv run g2lc synthetic run --fixture minimal_dr
 uv run g2lc certificate verify artifacts/synthetic/minimal_dr/certificate.json
 ```
 
+## Stage 1.5 acceptance
+
+```bash
+uv sync --locked --all-groups
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src tests
+uv run pytest -q --cov=g2lc --cov=g2lc_verifier --cov-branch \
+  --cov-report=term-missing \
+  --cov-report=json:artifacts/audit/stage1_5/coverage.json \
+  --cov-fail-under=90
+uv build
+uv run g2lc synthetic matrix
+uv run g2lc audit stage1-5 --output artifacts/audit/stage1_5/gate.json
+uv run python scripts/review_bundle.py
+```
+
+The Stage-1.5 audit additionally requires whole-project branch coverage of at least 85%,
+core line coverage of at least 95%, and core branch coverage of at least 90%. The portable
+runner `uv run python scripts/stage1_5_gate.py` records every command and exit code.
+The current checkout satisfies this gate; the authoritative result and measurements are
+stored in `artifacts/audit/stage1_5/gate.json`. This does not authorize Stage 2 work.

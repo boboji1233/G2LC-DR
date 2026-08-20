@@ -38,23 +38,18 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/g2lc"]
+packages = ["src/g2lc", "src/g2lc_verifier"]
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config"
 testpaths = ["tests"]
 
 [tool.coverage.run]
-branch = false
-source = ["g2lc"]
-omit = [
-  "src/g2lc/__main__.py",
-  "src/g2lc/cli.py",
-  "src/g2lc/data/*",
-]
+branch = true
+source = ["g2lc", "g2lc_verifier"]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 90
 show_missing = true
 skip_covered = true
 

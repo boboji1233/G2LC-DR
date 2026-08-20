@@ -1,4 +1,4 @@
-.PHONY: install format lint typecheck test test-fast quality synthetic-demo
+.PHONY: install format lint typecheck test test-fast quality synthetic-demo stage1-gate stage1-5-gate review-bundle
 
 UV ?= uv
 
@@ -28,3 +28,10 @@ synthetic-demo:
 	$(UV) run g2lc synthetic run --fixture minimal_dr
 	$(UV) run g2lc certificate verify artifacts/synthetic/minimal_dr/certificate.json
 
+stage1-gate: quality synthetic-demo
+
+stage1-5-gate:
+	$(UV) run python scripts/stage1_5_gate.py
+
+review-bundle:
+	$(UV) run python scripts/review_bundle.py
