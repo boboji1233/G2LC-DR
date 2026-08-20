@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Annotated, Literal, TypeAlias
 
 from pydantic import Field
@@ -29,11 +30,23 @@ class VerificationPayload(StrictModel):
     seed: int = Field(ge=0)
 
 
+class OptimalityPayload(StrictModel):
+    """Explicitly separate feasibility from each proved objective tier."""
+
+    claimed: bool = False
+    cost_proven: bool = False
+    count_proven: bool = False
+    lexical_proven: bool = False
+
+
 class CertificateBase(StrictModel):
     """Fields shared by all certificate outcomes."""
 
-    schema_version: Literal["1.0"] = "1.0"
+    schema_version: Literal["1.1"] = "1.1"
     certificate_type: str
+    semantic_contract: Literal["action-only-decision-sufficiency-v1.1"]
+    proof_scope: Literal["FINITE_EXHAUSTIVE", "SMT_UNIVERSAL", "BOUNDED"]
+    assumptions: list[str]
     project_id: str
     project_config: str
     source_hashes: list[SourceHash]
@@ -41,12 +54,19 @@ class CertificateBase(StrictModel):
     guideline_hashes: dict[str, str]
     operator_catalogue_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     derivation_graph_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    feasibility_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    decision_program_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     selected_operators: list[str] = Field(default_factory=list)
     derived_predicates: list[str] = Field(default_factory=list)
-    total_cost: float = Field(default=0, ge=0)
+    operator_closure: dict[str, list[str]]
+    action_distinction_count: int | None = Field(default=None, ge=0)
+    total_cost: Decimal = Field(default=Decimal(0), ge=0)
+    objective_tuple: tuple[Decimal, int, list[str]]
+    optimality: OptimalityPayload
     solver: SolverKind
     solver_status: SolverStatus
     verification: VerificationPayload
+    content_checksum: str = Field(pattern=r"^[0-9a-f]{64}$")
     certificate_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
@@ -56,6 +76,7 @@ class ExecutabilityCertificate(CertificateBase):
     certificate_type: Literal["EXECUTABLE"] = "EXECUTABLE"
     guidelines_covered: list[str]
     clauses_covered: list[str]
+    action_programs: dict[str, list[str]]
 
 
 class MissingEvidenceCertificate(CertificateBase):
@@ -65,7 +86,7 @@ class MissingEvidenceCertificate(CertificateBase):
     uncovered_counterexamples: list[Counterexample] = Field(min_length=1)
     missing_predicates: list[str] = Field(min_length=1)
     minimal_additions: list[str] = Field(default_factory=list)
-    minimum_repair_cost: float | None = Field(default=None, ge=0)
+    minimum_repair_cost: Decimal | None = Field(default=None, ge=0)
 
 
 class OutOfSpecificationCertificate(CertificateBase):
