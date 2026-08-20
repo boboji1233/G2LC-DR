@@ -23,7 +23,9 @@ operators:
     modalities: [CFP]
     cost: 1.0
     instability: 0.0
-    prerequisites: [gradable]
+    required_operator_ids: [quality_label]
+    required_evidence_conditions: [{predicate_id: gradable, allowed_values: ["yes"]}]
+    required_modalities: [CFP]
     provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
   - id: hem_presence_label
     name: Hemorrhage presence label
@@ -32,9 +34,11 @@ operators:
     modalities: [CFP]
     cost: 0.8
     instability: 0.0
-    prerequisites: [gradable]
+    required_operator_ids: [quality_label]
+    required_evidence_conditions: [{predicate_id: gradable, allowed_values: ["yes"]}]
+    required_modalities: [CFP]
     value_mappings:
-      hem_count_bin: {"0": absent, "1_3": present, "4_plus": present}
+      hem_count_bin: {"str:0": absent, "str:1_3": present, "str:4_plus": present}
     provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
   - id: hem_count_bin_label
     name: Hemorrhage count-bin label
@@ -43,7 +47,9 @@ operators:
     modalities: [CFP]
     cost: 2.0
     instability: 0.0
-    prerequisites: [gradable]
+    required_operator_ids: [quality_label]
+    required_evidence_conditions: [{predicate_id: gradable, allowed_values: ["yes"]}]
+    required_modalities: [CFP]
     provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
   - id: nv_presence_label
     name: NV presence label
@@ -52,17 +58,20 @@ operators:
     modalities: [CFP]
     cost: 1.5
     instability: 0.0
-    prerequisites: [gradable]
+    required_operator_ids: [quality_label]
+    required_evidence_conditions: [{predicate_id: gradable, allowed_values: ["yes"]}]
+    required_modalities: [CFP]
     provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
   - id: hem_full_mask
     name: Full hemorrhage mask deriving count burden
-    output_predicates: []
+    output_predicates: [hem_count_bin]
     granularity: PIXEL_MASK
     modalities: [CFP]
     cost: 5.0
     instability: 0.0
-    prerequisites: [gradable]
-    derivable_outputs: [hem_count_bin]
+    required_operator_ids: [quality_label]
+    required_evidence_conditions: [{predicate_id: gradable, allowed_values: ["yes"]}]
+    required_modalities: [CFP]
     provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
   - id: quality_label
     name: Image quality label
@@ -72,4 +81,3 @@ operators:
     cost: 0.5
     instability: 0.0
     provenance: {source: "synthetic fixture", version: "1.0.0-synthetic", review_status: SYNTHETIC}
-
