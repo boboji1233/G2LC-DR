@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Annotated, Literal, TypeAlias
+
 from pydantic import Field, field_validator, model_validator
 
 from g2lc.types import (
@@ -58,6 +60,82 @@ class EvidencePredicate(StrictModel):
         return self
 
 
+class EvidenceCondition(StrictModel):
+    """One typed equality atom used by the finite feasibility DSL."""
+
+    predicate: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    equals: JsonScalar
+
+    @field_validator("equals")
+    @classmethod
+    def condition_is_known(cls, value: JsonScalar) -> JsonScalar:
+        if value is None:
+            raise ValueError("feasibility conditions cannot compare with UNKNOWN")
+        return value
+
+
+class ImplicationConstraint(StrictModel):
+    kind: Literal["implication"]
+    antecedent: EvidenceCondition = Field(alias="if")
+    consequent: EvidenceCondition = Field(alias="then")
+
+
+class MutualExclusionConstraint(StrictModel):
+    kind: Literal["mutual_exclusion"]
+    conditions: list[EvidenceCondition] = Field(min_length=2)
+
+
+class ConditionalAllowedConstraint(StrictModel):
+    kind: Literal["conditional_allowed"]
+    antecedent: EvidenceCondition = Field(alias="if")
+    predicate: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    allowed_values: list[JsonScalar] = Field(min_length=1)
+
+
+class ExactlyOneConstraint(StrictModel):
+    kind: Literal["exactly_one"]
+    conditions: list[EvidenceCondition] = Field(min_length=2)
+
+
+class AtMostOneConstraint(StrictModel):
+    kind: Literal["at_most_one"]
+    conditions: list[EvidenceCondition] = Field(min_length=2)
+
+
+class DerivedEqualityConstraint(StrictModel):
+    kind: Literal["derived_equality"]
+    source_predicate: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    target_predicate: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    value_mapping: dict[str, JsonScalar] = Field(default_factory=dict)
+
+
+class ParentChildConstraint(StrictModel):
+    kind: Literal["parent_child"]
+    parent_predicate: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    child_predicate: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    when_parent_values: list[JsonScalar] = Field(min_length=1)
+    allowed_child_values: list[JsonScalar] = Field(min_length=1)
+
+
+FeasibilityConstraint: TypeAlias = Annotated[
+    ImplicationConstraint
+    | MutualExclusionConstraint
+    | ConditionalAllowedConstraint
+    | ExactlyOneConstraint
+    | AtMostOneConstraint
+    | DerivedEqualityConstraint
+    | ParentChildConstraint,
+    Field(discriminator="kind"),
+]
+
+
+class FeasibilityProgram(StrictModel):
+    """Versioned finite-state feasibility contract shared by Python and SMT."""
+
+    schema_version: Literal["1.0"] = "1.0"
+    constraints: list[FeasibilityConstraint] = Field(default_factory=list)
+
+
 class EvidenceOntology(StrictModel):
     """A versioned finite evidence language."""
 
@@ -66,6 +144,7 @@ class EvidenceOntology(StrictModel):
     version: str = Field(min_length=1)
     description: str = Field(min_length=1)
     predicates: list[EvidencePredicate] = Field(min_length=1)
+    feasibility: FeasibilityProgram = Field(default_factory=FeasibilityProgram)
     provenance: Provenance
 
     @model_validator(mode="after")
