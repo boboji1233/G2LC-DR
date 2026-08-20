@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -62,7 +63,8 @@ def main() -> int:
     payload: dict[str, Any] = {
         "schema_version": "1.0",
         "python_version": sys.version.split()[0],
-        "python_executable": Path(sys.executable).name,
+        "python_executable": sys.executable,
+        "platform": platform.platform(),
         "uv_version": uv_version.stdout.strip(),
         "commands": [],
     }

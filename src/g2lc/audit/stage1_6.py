@@ -420,6 +420,9 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         )
         environment_results[version] = {
             "python_version": commands.get("python_version"),
+            "python_executable": commands.get("python_executable"),
+            "platform": commands.get("platform"),
+            "uv_version": commands.get("uv_version"),
             "commands": commands.get("commands", []),
             "command_pass": command_pass,
             "test_count": test_count,
@@ -439,12 +442,27 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
                         "conflict_validation",
                         "empty_evidence",
                         "partial_evaluation",
+                        "repair",
+                        "certificate",
                         "relevant_state_projection",
                         "generated_feasibility_hash",
                     )
                 )
             },
             "passed": command_pass and failed_tests == 0 and test_count > 0 and coverage_pass,
+            "package_build_result": {
+                "passed": exit_codes.get("uv build") == 0,
+                "exit_code": exit_codes.get("uv build"),
+                "artifacts": [
+                    {
+                        "path": path.relative_to(ROOT).as_posix(),
+                        "sha256": sha256_file(path),
+                        "size": path.stat().st_size,
+                    }
+                    for path in sorted((ROOT / "dist").glob("*"))
+                    if path.is_file()
+                ],
+            },
         }
     matrix_path = audit / "solver_matrix.json"
     matrix = json.loads(matrix_path.read_text(encoding="utf-8")) if matrix_path.is_file() else {}
@@ -459,6 +477,16 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             "tamper_matrix_results",
         )
     ) and bool(semantic.get("passed"))
+
+    def focused_pass(marker: str) -> bool:
+        outcomes = [
+            passed
+            for item in environment_results.values()
+            for name, passed in item["focused_semantic_tests"].items()
+            if marker in name
+        ]
+        return bool(outcomes) and all(outcomes)
+
     commit = _git_value("rev-parse", "HEAD")
     verification_files = sorted(
         (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{commit}_verification.json")
@@ -467,6 +495,24 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         json.loads(verification_files[-1].read_text(encoding="utf-8"))
         if verification_files
         else {"passed": False, "reason": "review bundle not generated yet"}
+    )
+    archive_files = sorted(
+        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{commit}.zip")
+    )
+    checksum_files = sorted(
+        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{commit}.sha256")
+    )
+    bundle_artifact = (
+        {
+            "path": archive_files[-1].relative_to(ROOT).as_posix(),
+            "sha256": sha256_file(archive_files[-1]),
+            "size": archive_files[-1].stat().st_size,
+            "checksum_path": checksum_files[-1].relative_to(ROOT).as_posix()
+            if checksum_files
+            else None,
+        }
+        if archive_files
+        else None
     )
     prechange_path = audit / "prechange.json"
     regression_path = audit / "regressions_before.json"
@@ -507,11 +553,35 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             "exact_vs_separation": matrix.get("exact_vs_separation_results"),
             "semantic_generated_cases": semantic.get("semantic_generated_cases"),
             "semantic_generated_failures": semantic.get("semantic_generated_failures"),
+            "semantic_seed_records": [
+                {
+                    "seed": item.get("seed"),
+                    "passed": item.get("passed"),
+                    "predicate_count": item.get("predicate_count"),
+                    "guideline_count": item.get("guideline_count"),
+                    "feasibility_constraint_count": item.get("feasibility_constraint_count"),
+                    "derivation_rule_count": item.get("derivation_rule_count"),
+                    "prerequisite_edge_count": item.get("prerequisite_edge_count"),
+                    "greedy_valid": item.get("greedy_valid"),
+                    "independent_verifier": item.get("independent_verifier"),
+                }
+                for item in semantic.get("cases", [])
+            ],
             "passed": matrix_pass,
+        },
+        "cross_path_validity": {
+            "greedy_prerequisite_and_cost": focused_pass("greedy"),
+            "evidence_language_nonvacuity": focused_pass("empty_evidence_language"),
+            "partial_evaluation_derivations": focused_pass("partial_evaluation"),
+            "repair_exactness_and_fail_closed": focused_pass("repair"),
+        },
+        "package_build_results": {
+            version: item["package_build_result"] for version, item in environment_results.items()
         },
         "tamper_results": matrix.get("tamper_matrix_results"),
         "verifier_independence": matrix.get("verifier_independence_check"),
         "review_bundle_verification": bundle_verification,
+        "review_bundle_artifact": bundle_artifact,
         "gate_generation": {
             "method": "direct evidence aggregation after recorded subprocesses",
             "self_assumed_exit_code": False,
