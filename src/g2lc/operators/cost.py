@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from g2lc.operators.models import AnnotationOperator
 
 
-def weighted_cost(operator: AnnotationOperator, instability_weight: float) -> float:
+def weighted_cost(operator: AnnotationOperator, instability_weight: Decimal) -> Decimal:
     """Combine declared cost and instability without introducing empirical values."""
 
     if instability_weight < 0:
@@ -13,7 +15,10 @@ def weighted_cost(operator: AnnotationOperator, instability_weight: float) -> fl
     return operator.cost + instability_weight * operator.instability
 
 
-def scheme_cost(operators: list[AnnotationOperator], instability_weight: float) -> float:
-    """Return a stable rounded total for a selected scheme."""
+def scheme_cost(operators: list[AnnotationOperator], instability_weight: Decimal) -> Decimal:
+    """Return the exact declared decimal total for a selected scheme."""
 
-    return round(sum(weighted_cost(item, instability_weight) for item in operators), 9)
+    return sum(
+        (weighted_cost(item, instability_weight) for item in operators),
+        start=Decimal(0),
+    )
