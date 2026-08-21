@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from g2lc.guidelines.ast import And, Equals, Known, Not, Or
-from g2lc.guidelines.evaluator import EvaluationStatus, evaluate_expression, evaluate_guideline
+from g2lc.guidelines.evaluator import (
+    DecisionContext,
+    EvaluationStatus,
+    evaluate_expression,
+    evaluate_guideline,
+)
 from g2lc.guidelines.trivalued import TriValue, tri_and, tri_or
 from g2lc.types import EvidenceState
 
@@ -70,15 +75,19 @@ def test_nested_not(minimal_problem) -> None:  # type: ignore[no-untyped-def]
     assert evaluate_expression(expression, state, minimal_problem.ontology) is TriValue.TRUE
 
 
-def test_partial_state_is_insufficient_not_routine(minimal_problem) -> None:  # type: ignore[no-untyped-def]
+def test_partial_state_returns_all_possible_completion_actions(minimal_problem) -> None:  # type: ignore[no-untyped-def]
     guideline = minimal_problem.guidelines[0]
     result = evaluate_guideline(
         guideline,
         EvidenceState(values={"gradable": "yes"}),
-        minimal_problem.ontology,
+        DecisionContext(minimal_problem.ontology, minimal_problem.graph),
     )
-    assert result.status is EvaluationStatus.INSUFFICIENT_EVIDENCE
-    assert result.actions == []
+    assert result.status is EvaluationStatus.ACTION_SET
+    assert {item.values["decision"] for item in result.actions} == {
+        "monitor",
+        "refer",
+        "routine",
+    }
 
 
 def test_ungradable_priority_wins(minimal_problem) -> None:  # type: ignore[no-untyped-def]
@@ -90,7 +99,11 @@ def test_ungradable_priority_wins(minimal_problem) -> None:  # type: ignore[no-u
             "nv_presence": "present",
         }
     )
-    result = evaluate_guideline(minimal_problem.guidelines[1], state, minimal_problem.ontology)
+    result = evaluate_guideline(
+        minimal_problem.guidelines[1],
+        state,
+        DecisionContext(minimal_problem.ontology, minimal_problem.graph),
+    )
     assert result.status is EvaluationStatus.UNIQUE_ACTION
     assert result.actions[0].values == {"decision": "reshoot"}
 
@@ -104,6 +117,10 @@ def test_complete_default_action(minimal_problem) -> None:  # type: ignore[no-un
             "nv_presence": "absent",
         }
     )
-    result = evaluate_guideline(minimal_problem.guidelines[0], state, minimal_problem.ontology)
+    result = evaluate_guideline(
+        minimal_problem.guidelines[0],
+        state,
+        DecisionContext(minimal_problem.ontology, minimal_problem.graph),
+    )
     assert result.status is EvaluationStatus.UNIQUE_ACTION
     assert result.actions[0].values["decision"] == "routine"

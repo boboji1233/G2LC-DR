@@ -1,0 +1,17 @@
+schema_version: '1.1'
+graph_id: generated_9
+version: 1.0.0-synthetic
+provenance: &id001
+  source: Stage-1.6 generated semantic seed 9
+  version: 1.0.0-synthetic
+  review_status: SYNTHETIC
+rules:
+- id: derive_p1_from_p0
+  input_predicates:
+  - p0
+  output_predicates:
+  - p1
+  value_mapping:
+    bool:false: 0
+    bool:true: 1
+  provenance: *id001

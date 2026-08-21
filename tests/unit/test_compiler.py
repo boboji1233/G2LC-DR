@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from g2lc.compiler.api import compile_problem
 from g2lc.compiler.counterexample import find_counterexample
 from g2lc.compiler.dominance import dominated_operators
@@ -31,7 +33,8 @@ def test_exact_equals_bruteforce(minimal_problem) -> None:  # type: ignore[no-un
     finite = build_finite_problem(minimal_problem)
     exact = solve_exact(finite)
     brute = brute_force_optimum(finite)
-    assert brute == (EXPECTED, 5.0)
+    assert brute == (EXPECTED, Decimal("5.0"))
+    assert brute is not None
     assert exact.total_cost == brute[1]
 
 

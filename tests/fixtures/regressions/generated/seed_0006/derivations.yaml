@@ -1,0 +1,8 @@
+schema_version: '1.1'
+graph_id: generated_6
+version: 1.0.0-synthetic
+provenance:
+  source: Stage-1.6 generated semantic seed 6
+  version: 1.0.0-synthetic
+  review_status: SYNTHETIC
+rules: []

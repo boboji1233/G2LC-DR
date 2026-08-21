@@ -38,23 +38,78 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/g2lc"]
+packages = ["src/g2lc", "src/g2lc_verifier"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"examples/synthetic" = "g2lc/fixtures/synthetic"
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "/src",
+  "/tests",
+  "/examples/synthetic",
+  "/knowledge",
+  "/docs",
+  "/scripts",
+  "/configs/README.md",
+  "/data/licenses.csv",
+  "/.github/workflows",
+  "/.gitignore",
+  "/.pre-commit-config.yaml",
+  "/pyproject.toml",
+  "/uv.lock",
+  "/uv.toml",
+  "/Makefile",
+  "/README.md",
+  "/LICENSE",
+  "/CITATION.cff",
+  "/STATUS.md",
+  "/CHANGELOG.md",
+  "/IMPLEMENTATION_PLAN.md",
+  "/THEORY_TO_TEST_MATRIX.md",
+  "/AUDIT_REPORT_STAGE1_5.md",
+  "/AUDIT_REPORT_STAGE1_6.md",
+  "/OWNER_ACTIONS_AFTER_STAGE1_6.md",
+]
+exclude = [
+  "/.venv*",
+  "/.python",
+  "/.uv-cache",
+  "/.package-smoke",
+  "/.review-verify",
+  "/artifacts",
+  "/runs",
+  "/data/raw",
+  "/data/interim",
+  "/data/processed",
+  "/dist",
+  "/build",
+  "**/__pycache__",
+  "**/.pytest_cache",
+  "**/.mypy_cache",
+  "**/.ruff_cache",
+  "**/.hypothesis",
+  "**/*.pyc",
+  "**/*.pyo",
+  "**/*.log",
+  "**/*.ckpt",
+  "**/*.pt",
+  "**/*.pth",
+  "**/*.onnx",
+  "**/*.safetensors",
+  "**/*REVIEW*.zip",
+]
 
 [tool.pytest.ini_options]
 addopts = "--strict-markers --strict-config"
 testpaths = ["tests"]
 
 [tool.coverage.run]
-branch = false
-source = ["g2lc"]
-omit = [
-  "src/g2lc/__main__.py",
-  "src/g2lc/cli.py",
-  "src/g2lc/data/*",
-]
+branch = true
+source = ["g2lc", "g2lc_verifier"]
 
 [tool.coverage.report]
-fail_under = 85
+fail_under = 90
 show_missing = true
 skip_covered = true
 
@@ -69,7 +124,6 @@ select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
 "tests/**/*.py" = ["S101"]
 
 [tool.mypy]
-python_version = "3.11"
 strict = true
 packages = ["g2lc"]
 mypy_path = "src"

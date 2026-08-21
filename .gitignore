@@ -1,18 +1,24 @@
 # Python and local tools
 .venv/
+.venv*/
 .tools/
 .python/
 .uv-cache/
+.package-smoke/
+.review-verify/
 __pycache__/
 *.py[cod]
 .pytest_cache/
+pytest-of-*/
 .mypy_cache/
 .ruff_cache/
+.hypothesis/
 .coverage
 htmlcov/
 dist/
 build/
 *.egg-info/
+*.log
 
 # Editors and OS
 .idea/
@@ -31,6 +37,7 @@ data/processed/**
 *.pth
 *.pt
 *.onnx
+*.safetensors
 
 # Runs and generated artifacts (retain directory markers and committed examples)
 runs/**

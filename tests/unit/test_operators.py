@@ -16,15 +16,15 @@ def test_catalogue_has_required_fixture_operators(minimal_problem) -> None:  # t
 
 def test_presence_mapping_does_not_separate_count_bins(minimal_problem) -> None:  # type: ignore[no-untyped-def]
     operator = minimal_problem.catalogue.operator_map()["hem_presence_label"]
-    left = EvidenceState(values={"hem_count_bin": "1_3"})
-    right = EvidenceState(values={"hem_count_bin": "4_plus"})
+    left = EvidenceState(values={"gradable": "yes", "hem_count_bin": "1_3"})
+    right = EvidenceState(values={"gradable": "yes", "hem_count_bin": "4_plus"})
     assert not distinguishes(operator, minimal_problem.graph, left, right)
 
 
 def test_count_bin_separates_count_bins(minimal_problem) -> None:  # type: ignore[no-untyped-def]
     operator = minimal_problem.catalogue.operator_map()["hem_count_bin_label"]
-    left = EvidenceState(values={"hem_count_bin": "1_3"})
-    right = EvidenceState(values={"hem_count_bin": "4_plus"})
+    left = EvidenceState(values={"gradable": "yes", "hem_count_bin": "1_3"})
+    right = EvidenceState(values={"gradable": "yes", "hem_count_bin": "4_plus"})
     assert distinguishes(operator, minimal_problem.graph, left, right)
 
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
@@ -105,11 +107,11 @@ def test_adding_operators_cannot_break_executability(minimal_problem, indices: s
 @FAST
 @given(st.sampled_from(["0", "1_3", "4_plus"]), st.sampled_from(["0", "1_3", "4_plus"]))
 def test_presence_partition_matches_declared_mapping(
-    minimal_problem, left: str, right: str
-) -> None:  # type: ignore[no-untyped-def]
+    minimal_problem: Any, left: str, right: str
+) -> None:
     operator = minimal_problem.catalogue.operator_map()["hem_presence_label"]
-    left_state = EvidenceState(values={"hem_count_bin": left})
-    right_state = EvidenceState(values={"hem_count_bin": right})
+    left_state = EvidenceState(values={"gradable": "yes", "hem_count_bin": left})
+    right_state = EvidenceState(values={"gradable": "yes", "hem_count_bin": right})
     expected = (left == "0") != (right == "0")
     assert distinguishes(operator, minimal_problem.graph, left_state, right_state) is expected
 

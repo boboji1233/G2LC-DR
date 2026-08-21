@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 
 from pydantic import Field, field_validator, model_validator
@@ -45,15 +46,16 @@ class AnnotationOperator(StrictModel):
     output_predicates: list[str] = Field(default_factory=list)
     granularity: Granularity
     modalities: list[Modality] = Field(min_length=1)
-    cost: float = Field(ge=0, allow_inf_nan=False)
-    instability: float = Field(default=0, ge=0, le=1, allow_inf_nan=False)
-    prerequisites: list[str] = Field(default_factory=list)
-    derivable_outputs: list[str] = Field(default_factory=list)
+    cost: Decimal = Field(ge=0, allow_inf_nan=False)
+    instability: Decimal = Field(default=Decimal(0), ge=0, le=1, allow_inf_nan=False)
+    required_operator_ids: list[str] = Field(default_factory=list)
+    required_evidence_conditions: list[EvidenceRequirement] = Field(default_factory=list)
+    required_modalities: list[Modality] = Field(default_factory=list)
     value_mappings: dict[str, dict[str, JsonScalar]] = Field(default_factory=dict)
     availability: OperatorAvailability = OperatorAvailability.AVAILABLE
     provenance: Provenance
 
-    @field_validator("output_predicates", "prerequisites", "derivable_outputs")
+    @field_validator("output_predicates", "required_operator_ids", "required_modalities")
     @classmethod
     def unique_predicate_lists(cls, values: list[str]) -> list[str]:
         if len(set(values)) != len(values):
@@ -66,6 +68,26 @@ class AnnotationOperator(StrictModel):
         if unknown:
             raise ValueError(f"value_mappings target non-output predicates: {unknown}")
         return self
+
+
+class EvidenceRequirement(StrictModel):
+    """A state condition under which an annotation operator is executable."""
+
+    predicate_id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    allowed_values: list[JsonScalar] = Field(min_length=1)
+
+    @field_validator("allowed_values")
+    @classmethod
+    def known_unique_values(cls, values: list[JsonScalar]) -> list[JsonScalar]:
+        if any(value is None for value in values):
+            raise ValueError("operator evidence requirements cannot contain UNKNOWN")
+        keys = [(type(value).__name__, value) for value in values]
+        if len(set(keys)) != len(keys):
+            raise ValueError("operator evidence requirement values must be unique")
+        return values
+
+
+AnnotationOperator.model_rebuild(_types_namespace={"EvidenceRequirement": EvidenceRequirement})
 
 
 class OperatorCatalogue(StrictModel):
@@ -98,6 +120,7 @@ class DerivationRule(StrictModel):
     id: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
     input_predicates: list[str] = Field(min_length=1)
     output_predicates: list[str] = Field(min_length=1)
+    value_mapping: dict[str, JsonScalar] = Field(default_factory=dict)
     provenance: Provenance
 
     @field_validator("input_predicates", "output_predicates")

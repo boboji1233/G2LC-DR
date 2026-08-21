@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
+from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -10,6 +12,10 @@ import typer
 from pydantic import ValidationError
 from rich.console import Console
 
+from g2lc import __version__
+from g2lc.audit.stage1_5 import generate_gate as generate_stage1_5_gate
+from g2lc.audit.stage1_5 import run_synthetic_matrix
+from g2lc.audit.stage1_6 import generate_gate as generate_stage1_6_gate
 from g2lc.certificates.verifier import verify_certificate
 from g2lc.certificates.writer import build_certificate, write_certificate
 from g2lc.compiler.api import compile_problem
@@ -20,7 +26,7 @@ from g2lc.data.dedup import exact_duplicate_groups
 from g2lc.data.manifest import audit_manifest
 from g2lc.data.splits import write_split_lock
 from g2lc.errors import G2LCError, SourceValidationError
-from g2lc.guidelines.evaluator import evaluate_guideline
+from g2lc.guidelines.evaluator import DecisionContext, evaluate_guideline
 from g2lc.guidelines.parser import load_guidelines
 from g2lc.guidelines.validator import validate_guidelines
 from g2lc.ontology.loader import load_ontology
@@ -39,12 +45,14 @@ operator_app = typer.Typer(help="Annotation operator commands.")
 certificate_app = typer.Typer(help="Certificate commands.")
 synthetic_app = typer.Typer(help="Explicitly synthetic development fixtures.")
 data_app = typer.Typer(help="Metadata-only data governance commands.")
+audit_app = typer.Typer(help="Machine-readable stage-gate audits.")
 app.add_typer(ontology_app, name="ontology")
 app.add_typer(guideline_app, name="guideline")
 app.add_typer(operator_app, name="operator")
 app.add_typer(certificate_app, name="certificate")
 app.add_typer(synthetic_app, name="synthetic")
 app.add_typer(data_app, name="data")
+app.add_typer(audit_app, name="audit")
 console = Console()
 error_console = Console(stderr=True)
 
@@ -52,7 +60,14 @@ error_console = Console(stderr=True)
 def _emit(value: Any, json_output: bool) -> None:
     payload = value.model_dump(mode="json") if hasattr(value, "model_dump") else value
     if json_output:
-        typer.echo(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        typer.echo(
+            json.dumps(
+                payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                default=lambda item: str(item) if isinstance(item, Decimal) else repr(item),
+            )
+        )
     else:
         console.print(payload)
 
@@ -60,6 +75,13 @@ def _emit(value: Any, json_output: bool) -> None:
 def _fail(exc: Exception) -> None:
     error_console.print(f"[red]ERROR[/red] {exc}")
     raise typer.Exit(code=2)
+
+
+@app.command("version")
+def version_command() -> None:
+    """Print the installed G2LC-DR package version."""
+
+    typer.echo(__version__)
 
 
 @ontology_app.command("validate")
@@ -87,6 +109,7 @@ def ontology_validate(
 def guideline_validate(
     path: Annotated[Path, typer.Argument(exists=True, readable=True)],
     ontology: Annotated[Path | None, typer.Option("--ontology")] = None,
+    derivations: Annotated[Path | None, typer.Option("--derivations")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Validate one guideline file or every YAML file in a directory."""
@@ -95,11 +118,16 @@ def guideline_validate(
         paths = sorted(path.glob("*.yaml")) if path.is_dir() else [path]
         if not paths:
             raise SourceValidationError("directory contains no YAML guidelines", path=path)
+        if (ontology is None) != (derivations is None):
+            raise SourceValidationError(
+                "--ontology and --derivations must be provided together", path=path
+            )
         evidence = load_ontology(ontology) if ontology is not None else None
+        graph = load_derivation_graph(derivations) if derivations is not None else None
         count = 0
         for item in paths:
             bundle = load_guidelines(item)
-            validate_guidelines(bundle, evidence)
+            validate_guidelines(bundle, evidence, graph)
             count += len(bundle.guidelines)
         _emit({"valid": True, "files": len(paths), "guidelines": count}, json_output)
     except (G2LCError, ValidationError) as exc:
@@ -144,6 +172,9 @@ def guideline_evaluate(
     ontology: Annotated[Path, typer.Option("--ontology", exists=True, dir_okay=False)] = Path(
         "knowledge/evidence_ontology.yaml"
     ),
+    derivations: Annotated[Path, typer.Option("--derivations", exists=True, dir_okay=False)] = Path(
+        "knowledge/derivation_graph.yaml"
+    ),
     guideline_id: Annotated[str | None, typer.Option("--guideline-id")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -163,7 +194,14 @@ def guideline_evaluate(
         state_model = EvidenceState.model_validate(
             raw if isinstance(raw, dict) and "values" in raw else {"values": raw}
         )
-        result = evaluate_guideline(candidates[0], state_model, load_ontology(ontology))
+        result = evaluate_guideline(
+            candidates[0],
+            state_model,
+            DecisionContext(
+                ontology=load_ontology(ontology),
+                derivations=load_derivation_graph(derivations),
+            ),
+        )
         _emit(result, json_output)
     except (G2LCError, ValidationError) as exc:
         _fail(exc)
@@ -222,8 +260,74 @@ def synthetic_run(
     allowed = {"minimal_dr", "missing_evidence", "out_of_spec"}
     if fixture not in allowed:
         _fail(ValueError(f"unknown fixture {fixture!r}; choose one of {sorted(allowed)}"))
-    project = Path("examples") / "synthetic" / fixture / "project.yaml"
-    compile_command(project, solver, None, json_output)
+    checkout_project = Path("examples") / "synthetic" / fixture / "project.yaml"
+    if checkout_project.is_file():
+        compile_command(checkout_project, solver, None, json_output)
+        return
+    packaged_project = files("g2lc").joinpath("fixtures", "synthetic", fixture, "project.yaml")
+    with as_file(packaged_project) as project:
+        compile_command(project, solver, None, json_output)
+
+
+@synthetic_app.command("matrix")
+def synthetic_matrix(
+    random_seeds: Annotated[int, typer.Option("--random-seeds", min=1)] = 20,
+    semantic_generated_cases: Annotated[int, typer.Option("--semantic-generated-cases", min=0)] = 0,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Run deterministic finite/brute-force/Z3/separation/tamper equivalence checks."""
+
+    try:
+        result = run_synthetic_matrix(
+            random_seeds=random_seeds,
+            semantic_generated_cases=semantic_generated_cases,
+        )
+        _emit(result, json_output)
+        if not all(
+            bool(result[item]["passed"])
+            for item in (
+                "finite_vs_bruteforce_results",
+                "finite_vs_z3_results",
+                "exact_vs_separation_results",
+                "verifier_independence_check",
+                "tamper_matrix_results",
+            )
+        ):
+            raise typer.Exit(code=1)
+        if semantic_generated_cases and not result["semantic_generated_results"]["passed"]:
+            raise typer.Exit(code=1)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@audit_app.command("stage1-5")
+def audit_stage1_5(
+    output: Annotated[Path, typer.Option("--output")] = Path("artifacts/audit/stage1_5/gate.json"),
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Generate the Stage-1.5 gate from current command, coverage, and matrix evidence."""
+
+    try:
+        _emit(generate_stage1_5_gate(output), json_output)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@audit_app.command("stage1-6")
+def audit_stage1_6(
+    output: Annotated[Path, typer.Option("--output")] = Path("artifacts/audit/stage1_6/gate.json"),
+    required_pythons: Annotated[str | None, typer.Option("--required-pythons")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Aggregate recorded Stage-1.6 evidence without self-asserted command success."""
+
+    try:
+        required = (
+            [item.strip() for item in required_pythons.split(",")] if required_pythons else None
+        )
+        _emit(generate_stage1_6_gate(output, required), json_output)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
 
 
 @data_app.command("audit")

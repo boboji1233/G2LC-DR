@@ -1,0 +1,110 @@
+schema_version: "1.0"
+synthetic: true
+provenance:
+  source: "G2LC-DR Stage-1.5 semantic regression matrix"
+  version: "1.0.0-synthetic"
+  review_status: SYNTHETIC
+  note: "No clinical rules, observed costs, patient data, or performance claims. Multi-input derivations are rejected, so two_operator_synergy is not applicable."
+fixtures:
+  - id: priority_unknown_blocks_lower_action
+    expected_semantic_outcome: "possible actions retain both the higher-priority unknown branch and the lower-priority true branch"
+    expected_exact_objective: NOT_APPLICABLE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_regressions.py::test_higher_unknown_rule_preserves_possible_action
+  - id: same_action_different_clause
+    expected_semantic_outcome: "different winning clause traces with the same normalized action are decision-equivalent"
+    expected_exact_objective: NOT_APPLICABLE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_regressions.py::test_same_action_different_trace_has_same_decision_signature
+  - id: default_same_action_as_rule
+    expected_semantic_outcome: "a default and a rule producing the same normalized action are decision-equivalent"
+    expected_exact_objective: NOT_APPLICABLE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_regressions.py::test_default_same_action_as_rule_has_same_decision_signature
+  - id: typed_bool_int_collision
+    expected_semantic_outcome: "boolean true and integer one remain distinct semantic values"
+    expected_exact_objective: NOT_APPLICABLE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_regressions.py::test_bool_and_int_are_distinct_at_evaluation_boundary
+  - id: infeasible_state_false_counterexample
+    expected_semantic_outcome: "an infeasible complete state is excluded from the counterexample universe"
+    expected_exact_objective: NOT_APPLICABLE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_infeasible_state_cannot_form_a_false_counterexample
+  - id: deterministic_derivation_mapping
+    expected_semantic_outcome: "a total unary mapping computes its target from its observed source"
+    expected_exact_objective: NOT_APPLICABLE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_unary_derivation_is_total_computed_and_filters_states
+  - id: derivation_inconsistent_state_rejected
+    expected_semantic_outcome: "states inconsistent with a declared deterministic mapping are excluded"
+    expected_exact_objective: NOT_APPLICABLE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_unary_derivation_is_total_computed_and_filters_states
+  - id: operator_prerequisite_chain
+    expected_semantic_outcome: "selected operators include and cost all declared prerequisites"
+    expected_exact_objective: ["5.00", 4, [hem_count_bin_label, ma_presence_label, nv_presence_label, quality_label]]
+    expected_certificate_type: EXECUTABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_operator_prerequisite_chain_is_selected_and_costed
+  - id: unavailable_prerequisite_repair
+    expected_semantic_outcome: "incremental repair includes an unavailable target operator and its unavailable prerequisite"
+    expected_exact_objective: ["1.75", 2, [nv_presence_label, repair_gate]]
+    expected_certificate_type: INCOMPLETE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_unavailable_prerequisite_is_included_in_incremental_repair
+  - id: modality_mismatch
+    expected_semantic_outcome: "an operator whose required modality is absent is not a candidate"
+    expected_exact_objective: INFEASIBLE_CANDIDATE
+    expected_certificate_type: NOT_APPLICABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_required_modality_excludes_operator_from_cfp_project
+  - id: submill_cost_ordering
+    expected_semantic_outcome: "lossless decimal scaling preserves the cheaper sub-mill operator"
+    expected_exact_objective: ["4.5004", 4, [hem_count_bin_label, ma_presence_label, nv_presence_label, z_quality_cheaper]]
+    expected_certificate_type: EXECUTABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_sub_milliscale_costs_are_not_rounded_before_optimization
+  - id: equal_cost_lexicographic_tie
+    expected_semantic_outcome: "equal cost and count choose the lexicographically smallest operator tuple"
+    expected_exact_objective: ["1.000", 1, [a]]
+    expected_certificate_type: EXECUTABLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_equal_cost_objective_uses_lexicographic_operator_id_tie_break
+  - id: incremental_repair_differs_from_total_reopt
+    expected_semantic_outcome: "repair augments all available base evidence and does not replace it with a cheaper unavailable duplicate"
+    expected_exact_objective: ["1.5", 1, [nv_presence_label]]
+    expected_certificate_type: INCOMPLETE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_incremental_repair_does_not_replace_available_base
+  - id: same_priority_conflict_large_space
+    expected_semantic_outcome: "SMT validation finds the same-priority different-action witness above the finite threshold"
+    expected_exact_objective: VALIDATION_REJECTED
+    expected_certificate_type: NOT_EMITTED
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_matrix.py::test_large_guideline_bundle_uses_smt_instead_of_skipping_validation
+  - id: rehashed_certificate_tamper_matrix
+    expected_semantic_outcome: "all rehashed mutations of substantive EXECUTABLE, INCOMPLETE, and OUT_OF_SPEC fields are rejected"
+    expected_exact_objective: SOURCE_RECOMPUTED
+    expected_certificate_type: MULTIPLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_gate_artifacts.py::test_production_synthetic_matrix_runs_all_checks
+  - id: symbolic_certificate_does_not_enumerate
+    expected_semantic_outcome: "an SMT_UNIVERSAL separation certificate is written and independently verified without finite-state enumeration"
+    expected_exact_objective: ["5.00", 4, [hem_count_bin_label, ma_presence_label, nv_presence_label, quality_label]]
+    expected_certificate_type: EXECUTABLE
+    provenance: SYNTHETIC
+    focused_test: tests/unit/test_certificates.py::test_symbolic_certificate_does_not_enumerate_without_a_symbolic_proof
+  - id: verifier_import_boundary
+    expected_semantic_outcome: "the independent verifier source has no compiler or certificate-writer imports"
+    expected_exact_objective: SOURCE_RECOMPUTED
+    expected_certificate_type: MULTIPLE
+    provenance: SYNTHETIC
+    focused_test: tests/stage1_5/test_semantic_regressions.py::test_independent_verifier_package_has_no_compiler_imports

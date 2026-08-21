@@ -1,0 +1,91 @@
+schema_version: '1.0'
+ontology_id: generated_9
+version: 1.0.0-synthetic
+description: Generated bounded semantic differential fixture.
+provenance: &id001
+  source: Stage-1.6 generated semantic seed 9
+  version: 1.0.0-synthetic
+  review_status: SYNTHETIC
+predicates:
+- id: p0
+  name: Synthetic predicate p0
+  description: Generated only for cross-path semantic differential testing.
+  value_type: BOOLEAN
+  allowed_values: &id002
+  - false
+  - true
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p0
+  provenance: *id001
+- id: p1
+  name: Synthetic predicate p1
+  description: Generated only for cross-path semantic differential testing.
+  value_type: INTEGER
+  allowed_values: &id003
+  - 0
+  - 1
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p1
+  provenance: *id001
+- id: p2
+  name: Synthetic predicate p2
+  description: Generated only for cross-path semantic differential testing.
+  value_type: CATEGORICAL
+  allowed_values: &id004
+  - low
+  - high
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p2
+  provenance: *id001
+- id: p3
+  name: Synthetic predicate p3
+  description: Generated only for cross-path semantic differential testing.
+  value_type: BOOLEAN
+  allowed_values: *id002
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p3
+  provenance: *id001
+- id: p4
+  name: Synthetic predicate p4
+  description: Generated only for cross-path semantic differential testing.
+  value_type: INTEGER
+  allowed_values: *id003
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p4
+  provenance: *id001
+- id: p5
+  name: Synthetic predicate p5
+  description: Generated only for cross-path semantic differential testing.
+  value_type: CATEGORICAL
+  allowed_values: *id004
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p5
+  provenance: *id001
+feasibility:
+  schema_version: '1.0'
+  constraints:
+  - kind: conditional_allowed
+    if:
+      predicate: p0
+      equals: true
+    predicate: p5
+    allowed_values:
+    - high

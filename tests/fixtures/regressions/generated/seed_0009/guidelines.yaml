@@ -1,0 +1,26 @@
+schema_version: '1.0'
+synthetic: true
+guidelines:
+- id: generated_guideline_0
+  version: 1.0.0-synthetic
+  effective_date: not-clinical
+  modality_scope:
+  - CFP
+  action_schema:
+  - decision
+  provenance: &id001
+    source: Stage-1.6 generated semantic seed 9
+    version: 1.0.0-synthetic
+    review_status: SYNTHETIC
+  rules:
+  - id: primary
+    priority: 20
+    when:
+      eq:
+      - p3
+      - true
+    then:
+      decision: primary_0
+    provenance: *id001
+  default_action:
+    decision: default_0

@@ -35,3 +35,11 @@ code, documentation, experiments and manuscripts.
 Only synthetic software correctness may be claimed. No real dataset is present, no
 Oracle protocol has run, and no clinical or performance result exists.
 
+Stage 1.6 hardens decision sufficiency only under the declared finite evidence,
+feasibility, derivation, modality, and guideline semantics. It does not prove that the
+declared evidence language, synthetic rules, costs, or modalities are clinically valid or
+complete, and it does not establish visual learnability.
+
+A local Stage-1.6 `PASS` means the recorded synthetic software checks passed for the
+bound commit. It is not a clinical result, does not authorize Stage 2, and does not imply
+merge readiness until GitHub Actions and human review are independently green.
