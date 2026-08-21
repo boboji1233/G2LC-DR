@@ -8,6 +8,7 @@ import platform
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -32,7 +33,9 @@ def _write(payload: dict[str, Any]) -> None:
 def _record(
     payload: dict[str, Any], uv: str, index: int, display: str, arguments: list[str]
 ) -> int:
+    started = time.perf_counter()
     result = subprocess.run(arguments, cwd=ROOT, text=True, capture_output=True, check=False)
+    duration = time.perf_counter() - started
     log_path = LOGS / f"{index:02d}.log"
     log_path.write_text(
         f"$ {display}\n[stdout]\n{result.stdout}\n[stderr]\n{result.stderr}",
@@ -43,6 +46,7 @@ def _record(
             "command": display,
             "arguments": [Path(uv).name, *arguments[1:]],
             "exit_code": result.returncode,
+            "duration_seconds": round(duration, 6),
             "log": log_path.relative_to(ENVIRONMENT).as_posix(),
         }
     )
@@ -69,6 +73,9 @@ def main() -> int:
         "commands": [],
     }
     run = [uv, "run", "--python", sys.executable]
+    required = [
+        item.strip() for item in os.environ.get("G2LC_REQUIRED_PYTHONS", VERSION).split(",")
+    ]
     plan = [
         (
             f"uv sync --locked --all-groups --python {VERSION}",
@@ -89,7 +96,7 @@ def main() -> int:
                 "--cov-report=term-missing",
                 f"--cov-report=json:{ENVIRONMENT / 'coverage.json'}",
                 f"--junitxml={ENVIRONMENT / 'junit.xml'}",
-                "--cov-fail-under=90",
+                "--cov-fail-under=92",
             ],
         ),
         ("uv build", [uv, "build", "--python", sys.executable]),
@@ -107,15 +114,26 @@ def main() -> int:
                 "--json",
             ],
         ),
+        (
+            "uv run g2lc audit stage1-6 --output artifacts/audit/stage1_6/gate.json",
+            [
+                *run,
+                "g2lc",
+                "audit",
+                "stage1-6",
+                "--required-pythons",
+                ",".join(required),
+                "--output",
+                "artifacts/audit/stage1_6/gate.json",
+            ],
+        ),
     ]
     for index, (display, arguments) in enumerate(plan, start=1):
         _record(payload, uv, index, display, arguments)
-    required = [
-        item.strip() for item in os.environ.get("G2LC_REQUIRED_PYTHONS", VERSION).split(",")
-    ]
     gate_path = AUDIT / "gate.json"
     generate_gate(gate_path, required)
     review_arguments = [*run, "python", "scripts/review_bundle.py", "--stage", "1.6"]
+    finalize_arguments = [*review_arguments, "--finalize"]
     _record(
         payload,
         uv,
@@ -129,9 +147,18 @@ def main() -> int:
         uv,
         len(plan) + 2,
         "uv run python scripts/review_bundle.py --stage 1.6 --finalize",
-        review_arguments,
+        finalize_arguments,
     )
     gate = generate_gate(gate_path, required)
+    if gate["final_status"] == "PASS":
+        _record(
+            payload,
+            uv,
+            len(plan) + 3,
+            "uv run python scripts/review_bundle.py --stage 1.6 --finalize (PASS refresh)",
+            finalize_arguments,
+        )
+        gate = generate_gate(gate_path, required)
     return 0 if gate["final_status"] == "PASS" else 1
 
 

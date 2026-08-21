@@ -1,0 +1,66 @@
+schema_version: '1.0'
+catalogue_id: generated_8
+version: 1.0.0-synthetic
+synthetic: true
+provenance: &id001
+  source: Stage-1.6 generated semantic seed 8
+  version: 1.0.0-synthetic
+  review_status: SYNTHETIC
+operators:
+- id: observe_p0
+  name: Observe p0
+  output_predicates:
+  - p0
+  granularity: PRESENCE
+  modalities:
+  - CFP
+  cost: '1.6'
+  instability: '0.0'
+  required_operator_ids: []
+  provenance: *id001
+- id: observe_p1
+  name: Observe p1
+  output_predicates:
+  - p1
+  granularity: PRESENCE
+  modalities:
+  - CFP
+  cost: '2.7'
+  instability: '0.1'
+  required_operator_ids:
+  - observe_p0
+  provenance: *id001
+- id: observe_p2
+  name: Observe p2
+  output_predicates:
+  - p2
+  granularity: PRESENCE
+  modalities:
+  - CFP
+  cost: '3.8'
+  instability: '0.2'
+  required_operator_ids: []
+  provenance: *id001
+- id: observe_p3
+  name: Observe p3
+  output_predicates:
+  - p3
+  granularity: PRESENCE
+  modalities:
+  - CFP
+  cost: '4.9'
+  instability: '0.3'
+  required_operator_ids: []
+  provenance: *id001
+- id: observe_p4
+  name: Observe p4
+  output_predicates:
+  - p4
+  granularity: PRESENCE
+  modalities:
+  - CFP
+  cost: '1.0'
+  instability: '0.0'
+  required_operator_ids:
+  - observe_p3
+  provenance: *id001

@@ -11,7 +11,7 @@ predicates:
   name: Synthetic predicate p0
   description: Generated only for cross-path semantic differential testing.
   value_type: BOOLEAN
-  allowed_values:
+  allowed_values: &id002
   - false
   - true
   modalities:
@@ -23,10 +23,10 @@ predicates:
 - id: p1
   name: Synthetic predicate p1
   description: Generated only for cross-path semantic differential testing.
-  value_type: BOOLEAN
-  allowed_values:
-  - false
-  - true
+  value_type: INTEGER
+  allowed_values: &id003
+  - 0
+  - 1
   modalities:
   - CFP
   observability: IMAGE_OBSERVABLE
@@ -36,10 +36,10 @@ predicates:
 - id: p2
   name: Synthetic predicate p2
   description: Generated only for cross-path semantic differential testing.
-  value_type: BOOLEAN
+  value_type: CATEGORICAL
   allowed_values:
-  - false
-  - true
+  - low
+  - high
   modalities:
   - CFP
   observability: IMAGE_OBSERVABLE
@@ -50,9 +50,7 @@ predicates:
   name: Synthetic predicate p3
   description: Generated only for cross-path semantic differential testing.
   value_type: BOOLEAN
-  allowed_values:
-  - false
-  - true
+  allowed_values: *id002
   modalities:
   - CFP
   observability: IMAGE_OBSERVABLE
@@ -62,10 +60,8 @@ predicates:
 - id: p4
   name: Synthetic predicate p4
   description: Generated only for cross-path semantic differential testing.
-  value_type: BOOLEAN
-  allowed_values:
-  - false
-  - true
+  value_type: INTEGER
+  allowed_values: *id003
   modalities:
   - CFP
   observability: IMAGE_OBSERVABLE
@@ -75,10 +71,9 @@ predicates:
 feasibility:
   schema_version: '1.0'
   constraints:
-  - kind: implication
-    if:
-      predicate: p0
-      equals: true
-    then:
-      predicate: p4
-      equals: true
+  - kind: exactly_one
+    conditions:
+    - predicate: p0
+      equals: false
+    - predicate: p4
+      equals: 1

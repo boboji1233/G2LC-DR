@@ -42,8 +42,47 @@ def _git(*arguments: str) -> str:
     return result.stdout.strip()
 
 
-def _files(stage: str) -> list[Path]:
-    tracked = [ROOT / item for item in _git("ls-files").splitlines() if item]
+def _git_available() -> bool:
+    result = subprocess.run(
+        ["git", "rev-parse", "--is-inside-work-tree"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0 and result.stdout.strip() == "true"
+
+
+def _debug_files() -> list[Path]:
+    roots = ["src", "tests", "scripts", "docs", ".github", "examples", "knowledge"]
+    top_level = [
+        "pyproject.toml",
+        "uv.lock",
+        "Makefile",
+        "README.md",
+        "STATUS.md",
+        "CHANGELOG.md",
+        "IMPLEMENTATION_PLAN.md",
+        "THEORY_TO_TEST_MATRIX.md",
+        "AUDIT_REPORT_STAGE1_5.md",
+        "AUDIT_REPORT_STAGE1_6.md",
+        "OWNER_ACTIONS_AFTER_STAGE1_6.md",
+    ]
+    files: list[Path] = []
+    for name in roots:
+        root = ROOT / name
+        if root.exists():
+            files.extend(root.rglob("*"))
+    files.extend(ROOT / name for name in top_level if (ROOT / name).is_file())
+    return files
+
+
+def _files(stage: str, *, git_available: bool) -> list[Path]:
+    tracked = (
+        [ROOT / item for item in _git("ls-files").splitlines() if item]
+        if git_available
+        else _debug_files()
+    )
     audit = ROOT / "artifacts" / "audit" / f"stage{stage.replace('.', '_')}"
     generated = list(audit.rglob("*")) if audit.is_dir() else []
     excluded_parts = {".git", ".venv", "__pycache__", ".pytest_cache", ".mypy_cache"}
@@ -79,16 +118,20 @@ def _scan(files: list[Path]) -> dict[str, Any]:
     return {"passed": not findings, "findings": findings}
 
 
-def _metadata(stage: str, scan: dict[str, Any]) -> dict[str, Any]:
-    head = _git("rev-parse", "HEAD")
-    status = _git("status", "--short", "--untracked-files=no")
+def _metadata(
+    stage: str, scan: dict[str, Any], *, git_available: bool, finalize: bool
+) -> dict[str, Any]:
+    head = _git("rev-parse", "HEAD") if git_available else None
+    status = _git("status", "--short", "--untracked-files=no") if git_available else ""
     github_ref = os.environ.get("GITHUB_REF", "")
     github_sha = os.environ.get("GITHUB_SHA")
     return {
         "schema_version": "1.0",
         "stage": stage,
+        "publishable": git_available,
+        "finalization_pass": finalize,
         "git_commit": head,
-        "git_branch": _git("branch", "--show-current"),
+        "git_branch": _git("branch", "--show-current") if git_available else None,
         "dirty_tracked_worktree": bool(status),
         "pr_head_sha": os.environ.get("GITHUB_HEAD_SHA") or head,
         "pr_merge_sha": github_sha if github_ref.startswith("refs/pull/") else None,
@@ -135,18 +178,35 @@ def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str)
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--stage", choices=["1.5", "1.6"], default="1.6")
+    parser.add_argument(
+        "--finalize",
+        action="store_true",
+        help="Rebuild after the preliminary gate and first verified bundle exist.",
+    )
+    parser.add_argument(
+        "--allow-no-git",
+        action="store_true",
+        help="Create a clearly non-publishable debug archive outside a Git checkout.",
+    )
     arguments = parser.parse_args()
     stage = arguments.stage
     REVIEW.mkdir(parents=True, exist_ok=True)
-    head = _git("rev-parse", "HEAD")
-    if _git("status", "--short", "--untracked-files=no"):
+    git_available = _git_available()
+    if not git_available and not arguments.allow_no_git:
+        raise RuntimeError("review bundle requires a Git checkout; use --allow-no-git for debug")
+    short_head = _git("rev-parse", "--short=12", "HEAD") if git_available else "DEBUG_NO_GIT"
+    if git_available and _git("status", "--short", "--untracked-files=no"):
         raise RuntimeError("review bundle requires a clean tracked worktree")
-    selected = _files(stage)
+    selected = _files(stage, git_available=git_available)
     scan = _scan(selected)
     if not scan["passed"]:
         raise RuntimeError(f"privacy/safety scan failed: {scan['findings']}")
     stage_token = stage.replace(".", "_")
-    stem = f"G2LC_DR_STAGE{stage_token}_REVIEW_{head}"
+    stem = (
+        f"G2LC_DR_STAGE{stage_token}_REVIEW_{short_head}"
+        if git_available
+        else f"G2LC_DR_STAGE{stage_token}_{short_head}"
+    )
     archive = REVIEW / f"{stem}.zip"
     checksum = REVIEW / f"{stem}.sha256"
     manifest = REVIEW / f"{stem}_manifest.tsv"
@@ -159,7 +219,12 @@ def main() -> int:
         expected[relative] = digest
         rows.append(f"{relative}\t{digest}\t{path.stat().st_size}")
     manifest_text = "\n".join(rows) + "\n"
-    metadata = _metadata(stage, scan)
+    metadata = _metadata(
+        stage,
+        scan,
+        git_available=git_available,
+        finalize=arguments.finalize,
+    )
     metadata_name = f"{stem}_metadata.json"
     metadata_text = json.dumps(metadata, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
     manifest.write_text(manifest_text, encoding="utf-8")

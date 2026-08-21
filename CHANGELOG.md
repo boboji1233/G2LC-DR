@@ -9,12 +9,17 @@ made any clinical-validation or experiment-result claim.
 
 - Fixed Python 3.12 mypy targeting by allowing the active interpreter to select syntax.
 - Made greedy and dominance prerequisite-closure aware, with closure cost charged once.
-- Unified finite conflict, partial evaluation, finite enumeration, Z3, and independent
-  verification around feasibility, deterministic derivation, and nonempty-language rules.
+- Unified finite conflict, explicit-context partial evaluation, finite enumeration, Z3,
+  and independent verification around feasibility, deterministic derivation, and
+  nonempty-language rules; legacy calls that omit derivations now fail loudly.
 - Added decision-relevant state projection, CP-SAT incremental repair with a bounded
   brute-force oracle, and fail-closed symbolic repair limits.
-- Added 200 generated semantic problems varying ontology/rules/constraints/derivations/
-  prerequisites, 54 rehashed tamper cases, dual-Python CI, and a commit-bound verified bundle.
+- Added 200 generated semantic problems varying Boolean/integer/categorical domains,
+  guideline priorities/defaults, all seven feasibility kinds, transitive unary
+  derivations, prerequisite DAGs, and exact Decimal objectives; added 54 rehashed tamper
+  cases, dual-Python CI, and a commit-bound verified bundle.
+- Added an immutable-baseline reproduction probe and machine-readable pre-change ledger,
+  plus strict 92/86 whole-project and 96/91 core line/branch coverage thresholds.
 - Added certificate non-vacuity and relevant-closure evidence and replaced misleading
   clause-coverage naming with decision-program/action-distinction provenance.
 - Stage 2, real-data parsing, Oracle experiments, and visual-model work remain frozen.

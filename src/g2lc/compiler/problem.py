@@ -12,7 +12,7 @@ from pydantic import Field, ValidationError, field_validator
 
 from g2lc.errors import CompilationError
 from g2lc.guidelines.ast import Guideline, GuidelineBundle, guideline_predicates
-from g2lc.guidelines.evaluator import action_signature, evaluate_guideline
+from g2lc.guidelines.evaluator import DecisionContext, action_signature, evaluate_guideline
 from g2lc.guidelines.parser import load_guidelines
 from g2lc.guidelines.validator import validate_guidelines
 from g2lc.ontology.feasibility import feasible_completions, is_feasible_state
@@ -352,6 +352,11 @@ def build_finite_problem(
     if not states:
         raise CompilationError("UNSAT_EVIDENCE_LANGUAGE: no legal complete state exists")
     action_rows: list[dict[str, str]] = []
+    decision_context = DecisionContext(
+        ontology=loaded.ontology,
+        derivations=loaded.graph,
+        target_modalities=tuple(loaded.config.target_modalities),
+    )
     for state in states:
         action_rows.append(
             {
@@ -359,8 +364,7 @@ def build_finite_problem(
                     evaluate_guideline(
                         guideline,
                         state,
-                        loaded.ontology,
-                        derivations=loaded.graph,
+                        decision_context,
                     )
                 )
                 for guideline in loaded.guidelines

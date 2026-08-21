@@ -135,5 +135,7 @@ uv run g2lc audit stage1-6 --required-pythons 3.11,3.12 \
   --output artifacts/audit/stage1_6/gate.json
 ```
 
-The gate retains the Stage-1.5 coverage floors, requires 200 generated semantic problems,
-records actual subprocess exit codes, and verifies a commit-bound privacy-safe archive.
+The gate requires whole-project line/branch coverage of at least 92%/86% and core
+line/branch coverage of at least 96%/91%, plus 200 generated semantic problems. It
+records actual subprocess exit codes and durations and verifies a commit-bound,
+privacy-safe archive named with the first 12 hexadecimal commit characters.

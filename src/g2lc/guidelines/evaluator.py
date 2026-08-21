@@ -20,13 +20,23 @@ from g2lc.guidelines.ast import (
     LessEqual,
     Not,
     Or,
+    guideline_predicates,
 )
 from g2lc.guidelines.trivalued import TriValue, tri_and, tri_or
 from g2lc.ontology.feasibility import feasible_completions
-from g2lc.ontology.models import EvidenceOntology
+from g2lc.ontology.models import (
+    AtMostOneConstraint,
+    ConditionalAllowedConstraint,
+    DerivedEqualityConstraint,
+    EvidenceOntology,
+    ExactlyOneConstraint,
+    ImplicationConstraint,
+    MutualExclusionConstraint,
+    ParentChildConstraint,
+)
 from g2lc.operators.derivation import derivations_consistent
 from g2lc.operators.models import DerivationGraph
-from g2lc.types import EvidenceState, StrictModel, scalar_equal
+from g2lc.types import EvidenceState, Modality, StrictModel, scalar_equal
 from g2lc.utils.io import canonical_json
 
 
@@ -55,7 +65,87 @@ class DecisionContext:
 
     ontology: EvidenceOntology
     derivations: DerivationGraph | None = None
+    target_modalities: tuple[Modality, ...] = ()
     semantic_contract_version: str = "action-only-decision-sufficiency-v1.1"
+
+
+_DERIVATIONS_UNSET = object()
+
+
+def _constraint_predicates(constraint: object) -> set[str]:
+    if isinstance(constraint, ImplicationConstraint):
+        return {constraint.antecedent.predicate, constraint.consequent.predicate}
+    if isinstance(
+        constraint, (MutualExclusionConstraint, ExactlyOneConstraint, AtMostOneConstraint)
+    ):
+        return {item.predicate for item in constraint.conditions}
+    if isinstance(constraint, ConditionalAllowedConstraint):
+        return {constraint.antecedent.predicate, constraint.predicate}
+    if isinstance(constraint, DerivedEqualityConstraint):
+        return {constraint.source_predicate, constraint.target_predicate}
+    if isinstance(constraint, ParentChildConstraint):
+        return {constraint.parent_predicate, constraint.child_predicate}
+    raise AssertionError(type(constraint).__name__)
+
+
+def decision_relevant_predicates(
+    guideline: Guideline,
+    context: DecisionContext,
+) -> set[str]:
+    """Close guideline predicates over feasibility and deterministic derivations."""
+
+    relevant = set(guideline_predicates(guideline))
+    changed = True
+    while changed:
+        changed = False
+        for constraint in context.ontology.feasibility.constraints:
+            dependencies = _constraint_predicates(constraint)
+            if relevant.intersection(dependencies) and not dependencies.issubset(relevant):
+                relevant.update(dependencies)
+                changed = True
+        if context.derivations is not None:
+            for rule in context.derivations.rules:
+                dependencies = set(rule.input_predicates) | set(rule.output_predicates)
+                if relevant.intersection(dependencies) and not dependencies.issubset(relevant):
+                    relevant.update(dependencies)
+                    changed = True
+    return relevant
+
+
+def decision_relevant_completions(
+    guideline: Guideline,
+    state: EvidenceState,
+    context: DecisionContext,
+) -> list[EvidenceState]:
+    """Return one feasible witness per decision-relevant partial completion.
+
+    Unrelated ontology dimensions remain existentially quantified.  They are still
+    checked for global feasibility, but they cannot multiply the action evaluation
+    work or alter its decision signature.
+    """
+
+    relevant = decision_relevant_predicates(guideline, context)
+    predicates = context.ontology.predicate_map()
+    missing = sorted(item for item in relevant if not state.known(item))
+    if not missing:
+        witness = next(
+            feasible_completions(state, context.ontology, context.derivations),
+            None,
+        )
+        return [witness] if witness is not None else []
+
+    from itertools import product
+
+    witnesses: list[EvidenceState] = []
+    for values in product(*(predicates[item].allowed_values for item in missing)):
+        partial = EvidenceState(values={**state.values, **dict(zip(missing, values, strict=True))})
+        witness = next(
+            feasible_completions(partial, context.ontology, context.derivations),
+            None,
+        )
+        if witness is not None:
+            witnesses.append(witness)
+    return witnesses
 
 
 def validate_evidence_state(state: EvidenceState, ontology: EvidenceOntology) -> None:
@@ -132,11 +222,37 @@ def _evaluate_expression(
 def evaluate_guideline(
     guideline: Guideline,
     state: EvidenceState,
-    ontology: EvidenceOntology,
+    context: DecisionContext | EvidenceOntology,
     *,
-    derivations: DerivationGraph | None = None,
+    derivations: DerivationGraph | object | None = _DERIVATIONS_UNSET,
 ) -> GuidelineEvaluation:
-    """Evaluate priorities while retaining ambiguity and missing evidence."""
+    """Evaluate priorities under an explicit feasibility/derivation context.
+
+    Passing a bare ontology without the keyword-only ``derivations`` declaration is
+    rejected.  That compatibility boundary prevents the pre-Stage-1.6 failure mode in
+    which a caller silently forgot a project's deterministic derivation graph.
+    """
+
+    if isinstance(context, DecisionContext):
+        if derivations is not _DERIVATIONS_UNSET:
+            raise GuidelineValidationError(
+                "do not pass derivations separately when using DecisionContext"
+            )
+        decision_context = context
+    else:
+        if derivations is _DERIVATIONS_UNSET:
+            raise GuidelineValidationError(
+                "evaluate_guideline requires DecisionContext or an explicit "
+                "derivations=None declaration"
+            )
+        if derivations is not None and not isinstance(derivations, DerivationGraph):
+            raise GuidelineValidationError("invalid derivation context")
+        decision_context = DecisionContext(
+            ontology=context,
+            derivations=derivations,
+        )
+    ontology = decision_context.ontology
+    derivation_graph = decision_context.derivations
 
     results: list[tuple[int, str, ClinicalAction, TriValue]] = []
     try:
@@ -162,13 +278,13 @@ def evaluate_guideline(
     action_by_key: dict[str, ClinicalAction] = {}
     matched: set[str] = set()
     if missing:
-        for complete in feasible_completions(state, ontology, derivations):
+        for complete in decision_relevant_completions(guideline, state, decision_context):
             actions, winner_ids = _evaluate_complete(guideline, complete, ontology)
             matched.update(winner_ids)
             for action in actions:
                 action_by_key[canonical_json(action.model_dump(mode="json"))] = action
     else:
-        if derivations is not None and not derivations_consistent(state, derivations):
+        if derivation_graph is not None and not derivations_consistent(state, derivation_graph):
             raise GuidelineValidationError(
                 "complete evidence state is inconsistent with deterministic derivations"
             )

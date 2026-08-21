@@ -1,6 +1,6 @@
 # Project Status
 
-Last updated: 2026-08-20 (Asia/Shanghai)
+Last updated: 2026-08-21 (Asia/Shanghai)
 
 Stage 1.6 cross-path hardening is implemented locally; its commit-bound dual-Python
 gate is the only authoritative acceptance record.
@@ -14,13 +14,16 @@ Stage 2, Oracle, and visual training remain frozen.
   regression ledger is `artifacts/audit/stage1_6/regressions_before.json`.
 - Greedy selection now closes and pays prerequisites, finite conflict validation uses
   feasibility and derivation semantics, empty evidence languages fail closed, partial
-  evaluation applies derivations, and repair uses CP-SAT with a bounded brute-force oracle.
-- Deterministic semantic generation varies predicates, guidelines, feasibility,
-  derivations, prerequisite graphs, and Decimal objectives; failures persist by seed.
+  evaluation requires an explicit decision context and projects unrelated dimensions,
+  and repair uses CP-SAT with a bounded brute-force oracle.
+- Deterministic semantic generation varies Boolean/integer/categorical predicates,
+  guidelines, all seven feasibility kinds, transitive unary derivations, prerequisite
+  graphs, and Decimal objectives; failures persist by seed.
 - Certificates now prove non-vacuity, bind the relevant-predicate closure, use
   action-distinction terminology, and are checked by the import-isolated verifier.
-- Python 3.11/3.12 commands, coverage, 200-case semantic results, tamper results, and
-  bundle verification are reported only from `artifacts/audit/stage1_6/gate.json`.
+- Python 3.11/3.12 commands, coverage against 92/86 whole-project and 96/91 core
+  line/branch floors, 200-case semantic results, tamper results, and bundle verification
+  are reported only from `artifacts/audit/stage1_6/gate.json`.
 
 ## Current Stage 1.5 audit
 
@@ -62,7 +65,8 @@ feasibility, derivation, modality, and guideline semantics.
 
 ## Next dependency-satisfied tasks
 
-1. Review `artifacts/audit/stage1_6/gate.json` and the commit-addressed Stage-1.6 bundle.
+1. Review `artifacts/audit/stage1_6/gate.json`, the 12-character commit-addressed bundle,
+   and `OWNER_ACTIONS_AFTER_STAGE1_6.md`.
 2. Keep all Stage 2, real-data parsing, Oracle, and visual-model work frozen until a
    separately authorized task satisfies its own data, provenance, and scientific gates.
 

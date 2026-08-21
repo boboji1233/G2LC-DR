@@ -8,6 +8,7 @@ derivations: derivations.yaml
 target_modalities:
 - CFP
 instability_weight: '0.0'
+required_operators: []
 max_states: 128
 seed: 3
 output: certificate.json

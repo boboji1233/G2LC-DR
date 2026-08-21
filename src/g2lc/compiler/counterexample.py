@@ -27,7 +27,7 @@ from g2lc.guidelines.ast import (
     Not,
     Or,
 )
-from g2lc.guidelines.evaluator import action_signature, evaluate_guideline
+from g2lc.guidelines.evaluator import DecisionContext, action_signature, evaluate_guideline
 from g2lc.ontology.models import (
     AtMostOneConstraint,
     ConditionalAllowedConstraint,
@@ -343,13 +343,17 @@ def find_counterexample(
 
     left_state = state_from(left)
     right_state = state_from(right)
+    decision_context = DecisionContext(
+        ontology=problem.ontology,
+        derivations=problem.graph,
+        target_modalities=tuple(problem.config.target_modalities),
+    )
     left_actions = {
         guideline.id: action_signature(
             evaluate_guideline(
                 guideline,
                 left_state,
-                problem.ontology,
-                derivations=problem.graph,
+                decision_context,
             )
         )
         for guideline in problem.guidelines
@@ -359,8 +363,7 @@ def find_counterexample(
             evaluate_guideline(
                 guideline,
                 right_state,
-                problem.ontology,
-                derivations=problem.graph,
+                decision_context,
             )
         )
         for guideline in problem.guidelines

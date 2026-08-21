@@ -36,7 +36,9 @@ the finite problem.
 
 ```bash
 uv run g2lc ontology validate examples/synthetic/minimal_dr/ontology.yaml
-uv run g2lc guideline validate examples/synthetic/minimal_dr/guidelines.yaml
+uv run g2lc guideline validate examples/synthetic/minimal_dr/guidelines.yaml \
+  --ontology examples/synthetic/minimal_dr/ontology.yaml \
+  --derivations examples/synthetic/minimal_dr/derivations.yaml
 uv run g2lc operator validate examples/synthetic/minimal_dr/operators.yaml
 uv run g2lc compile examples/synthetic/minimal_dr/project.yaml --solver exact
 uv run g2lc synthetic run --fixture missing_evidence
@@ -48,7 +50,9 @@ make review-bundle
 ```
 
 Guideline evaluation accepts a YAML or JSON evidence state and never converts missing
-values into false. See `docs/runbook.md` for the complete workflow and extension rules.
+values into false. Stage 1.6 requires an explicit decision context (ontology,
+derivations, semantic-contract version, and target modalities) so a caller cannot
+silently omit the derivation graph. See `docs/runbook.md` for the complete workflow.
 
 After the compiler gate, a metadata-only local adapter can be audited without writing:
 

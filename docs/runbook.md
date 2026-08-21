@@ -11,7 +11,8 @@ feasibility, derivation, modality, and guideline semantics.
 ```bash
 uv run g2lc ontology validate examples/synthetic/minimal_dr/ontology.yaml
 uv run g2lc guideline validate examples/synthetic/minimal_dr/guidelines.yaml \
-  --ontology examples/synthetic/minimal_dr/ontology.yaml
+  --ontology examples/synthetic/minimal_dr/ontology.yaml \
+  --derivations examples/synthetic/minimal_dr/derivations.yaml
 uv run g2lc operator validate examples/synthetic/minimal_dr/operators.yaml \
   --ontology examples/synthetic/minimal_dr/ontology.yaml \
   --derivations examples/synthetic/minimal_dr/derivations.yaml
@@ -59,9 +60,12 @@ data, checkpoints, caches, and Git internals and emits a SHA-256 checksum.
 
 ## 4a. Run the Stage-1.6 cross-path gate
 
-Run from a clean commit descended from `ec3250d…`:
+The immutable baseline is the full commit
+`ec3250d7e3dba0379c3b5205949c23e4f4ee5d59`. Capture its pre-change evidence before
+running the gate on a clean descendant:
 
 ```bash
+uv run python scripts/stage1_6_capture_baseline.py /path/to/detached/ec3250d-checkout
 uv run --python 3.11 python scripts/stage1_6_gate.py
 uv run --python 3.12 python scripts/stage1_6_gate.py
 uv run --python 3.12 g2lc audit stage1-6 --required-pythons 3.11,3.12 \
@@ -71,7 +75,8 @@ uv run --python 3.12 g2lc audit stage1-6 --required-pythons 3.11,3.12 \
 The runner records each real exit code, branch-aware coverage, JUnit outcomes, package
 build, 20 cost perturbations, 200 varied semantic problems, tamper rejection, and bundle
 verification. It never inserts a synthetic successful exit code for its own audit step.
-The weekly/manual CI stress job expands the semantic generator to 2,000 cases.
+The enforced coverage floors are 92%/86% whole-project line/branch and 96%/91% core
+line/branch. The weekly/manual CI stress job expands the semantic generator to 2,000 cases.
 
 ## 5. Add a guideline safely
 

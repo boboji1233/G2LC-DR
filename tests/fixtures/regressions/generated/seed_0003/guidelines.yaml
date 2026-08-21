@@ -13,14 +13,14 @@ guidelines:
     version: 1.0.0-synthetic
     review_status: SYNTHETIC
   rules:
-  - id: positive
-    priority: 10
+  - id: primary
+    priority: 20
     when:
       eq:
       - p3
       - true
     then:
-      decision: positive_0
+      decision: primary_0
     provenance: *id001
   default_action:
-    decision: negative_0
+    decision: default_0

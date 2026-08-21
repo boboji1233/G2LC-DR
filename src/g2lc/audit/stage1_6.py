@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import platform
 import shutil
 import subprocess
@@ -34,13 +35,31 @@ from g2lc.compiler.problem import (
     load_compiler_problem,
 )
 from g2lc.compiler.result import CompilerStatus, SolverStatus
-from g2lc.guidelines.evaluator import action_signature, evaluate_guideline
+from g2lc.guidelines.evaluator import DecisionContext, action_signature, evaluate_guideline
 from g2lc.types import scalar_key
 from g2lc.utils.io import canonical_json, sha256_file
 from g2lc_verifier import verify_certificate
 
 ROOT = Path(__file__).resolve().parents[3]
 REGRESSION_ROOT = ROOT / "tests" / "fixtures" / "regressions" / "generated"
+COVERAGE_THRESHOLDS = {
+    "whole_line": 92.0,
+    "whole_branch": 86.0,
+    "core_line": 96.0,
+    "core_branch": 91.0,
+}
+MANDATORY_COMMAND_MARKERS = (
+    "uv sync --locked --all-groups --python",
+    "uv run ruff check .",
+    "uv run ruff format --check .",
+    "uv run mypy src tests",
+    "uv run pytest -q --cov-branch --cov=g2lc --cov=g2lc_verifier",
+    "uv build",
+    "uv run g2lc synthetic matrix --random-seeds 20 --semantic-generated-cases 200",
+    "uv run g2lc audit stage1-6 --output artifacts/audit/stage1_6/gate.json",
+    "uv run python scripts/review_bundle.py --stage 1.6",
+    "uv run python scripts/review_bundle.py --stage 1.6 --finalize",
+)
 
 
 def _provenance(seed: int) -> dict[str, str]:
@@ -65,54 +84,178 @@ def generate_semantic_problem(seed: int, directory: Path) -> Path:
     predicate_count = 2 + seed % 5
     predicate_ids = [f"p{index}" for index in range(predicate_count)]
     provenance = _provenance(seed)
-    predicates = [
-        {
-            "id": predicate_id,
-            "name": f"Synthetic predicate {predicate_id}",
-            "description": "Generated only for cross-path semantic differential testing.",
-            "value_type": "BOOLEAN",
-            "allowed_values": [False, True],
-            "modalities": ["CFP"],
-            "observability": "IMAGE_OBSERVABLE",
-            "recommended_operators": [f"observe_{predicate_id}"],
-            "provenance": provenance,
-        }
-        for predicate_id in predicate_ids
+    domain_specs: list[tuple[str, list[Any]]] = [
+        ("BOOLEAN", [False, True]),
+        ("INTEGER", [0, 1]),
+        ("CATEGORICAL", ["low", "high"]),
     ]
+    predicate_specs = [
+        domain_specs[(seed + index) % len(domain_specs)] for index in range(predicate_count)
+    ]
+    predicates = []
+    for predicate_id, (value_type, domain) in zip(predicate_ids, predicate_specs, strict=True):
+        predicates.append(
+            {
+                "id": predicate_id,
+                "name": f"Synthetic predicate {predicate_id}",
+                "description": "Generated only for cross-path semantic differential testing.",
+                "value_type": value_type,
+                "allowed_values": domain,
+                "modalities": ["CFP"],
+                "observability": "IMAGE_OBSERVABLE",
+                "recommended_operators": [f"observe_{predicate_id}"],
+                "provenance": provenance,
+            }
+        )
+
+    def base_value(index: int) -> Any:
+        return predicate_specs[index][1][0]
+
+    def alternate_value(index: int) -> Any:
+        return predicate_specs[index][1][1]
+
+    def total_mapping(source_index: int, target_index: int) -> dict[str, Any]:
+        source_domain = predicate_specs[source_index][1]
+        target_domain = predicate_specs[target_index][1]
+        return {
+            scalar_key(value): target_domain[index % len(target_domain)]
+            for index, value in enumerate(source_domain)
+        }
+
     constraints: list[dict[str, Any]] = []
-    if seed % 3 == 0:
+    last = predicate_count - 1
+    constraint_kind = seed % 7
+    if constraint_kind == 0:
         constraints.append(
             {
                 "kind": "implication",
-                "if": {"predicate": predicate_ids[0], "equals": True},
-                "then": {"predicate": predicate_ids[-1], "equals": True},
+                "if": {"predicate": predicate_ids[0], "equals": alternate_value(0)},
+                "then": {
+                    "predicate": predicate_ids[last],
+                    "equals": alternate_value(last),
+                },
             }
         )
-    if predicate_count >= 3 and seed % 5 == 0:
+    elif constraint_kind == 1:
         constraints.append(
             {
                 "kind": "mutual_exclusion",
                 "conditions": [
-                    {"predicate": predicate_ids[1], "equals": True},
-                    {"predicate": predicate_ids[2], "equals": True},
+                    {"predicate": predicate_ids[0], "equals": alternate_value(0)},
+                    {
+                        "predicate": predicate_ids[last],
+                        "equals": alternate_value(last),
+                    },
                 ],
             }
         )
+    elif constraint_kind == 2:
+        constraints.append(
+            {
+                "kind": "conditional_allowed",
+                "if": {"predicate": predicate_ids[0], "equals": alternate_value(0)},
+                "predicate": predicate_ids[last],
+                "allowed_values": [alternate_value(last)],
+            }
+        )
+    elif constraint_kind == 3:
+        constraints.append(
+            {
+                "kind": "exactly_one",
+                "conditions": [
+                    {"predicate": predicate_ids[0], "equals": base_value(0)},
+                    {
+                        "predicate": predicate_ids[last],
+                        "equals": alternate_value(last),
+                    },
+                ],
+            }
+        )
+    elif constraint_kind == 4:
+        constraints.append(
+            {
+                "kind": "at_most_one",
+                "conditions": [
+                    {"predicate": predicate_ids[0], "equals": alternate_value(0)},
+                    {
+                        "predicate": predicate_ids[last],
+                        "equals": alternate_value(last),
+                    },
+                ],
+            }
+        )
+    elif constraint_kind == 5:
+        constraints.append(
+            {
+                "kind": "derived_equality",
+                "source_predicate": predicate_ids[0],
+                "target_predicate": predicate_ids[last],
+                "value_mapping": total_mapping(0, last),
+            }
+        )
+    else:
+        constraints.append(
+            {
+                "kind": "parent_child",
+                "parent_predicate": predicate_ids[0],
+                "child_predicate": predicate_ids[last],
+                "when_parent_values": [alternate_value(0)],
+                "allowed_child_values": [alternate_value(last)],
+            }
+        )
+
     derivation_rules: list[dict[str, Any]] = []
-    if seed % 4 == 0:
+    if seed % 4 in {0, 1}:
         derivation_rules.append(
             {
                 "id": "derive_p1_from_p0",
                 "input_predicates": [predicate_ids[0]],
                 "output_predicates": [predicate_ids[1]],
-                "value_mapping": {"bool:false": False, "bool:true": True},
+                "value_mapping": total_mapping(0, 1),
                 "provenance": provenance,
             }
         )
+    if predicate_count >= 3 and seed % 8 == 0:
+        derivation_rules.append(
+            {
+                "id": "derive_p2_from_p1",
+                "input_predicates": [predicate_ids[1]],
+                "output_predicates": [predicate_ids[2]],
+                "value_mapping": total_mapping(1, 2),
+                "provenance": provenance,
+            }
+        )
+
     guideline_count = 1 + seed % 3
     guidelines = []
     for guideline_index in range(guideline_count):
-        predicate_id = predicate_ids[(seed + guideline_index) % predicate_count]
+        predicate_index = (seed + guideline_index) % predicate_count
+        predicate_id = predicate_ids[predicate_index]
+        secondary_index = (predicate_index + 1) % predicate_count
+        rules = [
+            {
+                "id": "primary",
+                "priority": 20 + guideline_index,
+                "when": {"eq": [predicate_id, alternate_value(predicate_index)]},
+                "then": {"decision": f"primary_{guideline_index}"},
+                "provenance": provenance,
+            }
+        ]
+        if (seed + guideline_index) % 2 == 0:
+            rules.append(
+                {
+                    "id": "secondary",
+                    "priority": 10 + guideline_index,
+                    "when": {
+                        "eq": [
+                            predicate_ids[secondary_index],
+                            alternate_value(secondary_index),
+                        ]
+                    },
+                    "then": {"decision": f"secondary_{guideline_index}"},
+                    "provenance": provenance,
+                }
+            )
         guidelines.append(
             {
                 "id": f"generated_guideline_{guideline_index}",
@@ -121,21 +264,16 @@ def generate_semantic_problem(seed: int, directory: Path) -> Path:
                 "modality_scope": ["CFP"],
                 "action_schema": ["decision"],
                 "provenance": provenance,
-                "rules": [
-                    {
-                        "id": "positive",
-                        "priority": 10 + guideline_index,
-                        "when": {"eq": [predicate_id, True]},
-                        "then": {"decision": f"positive_{guideline_index}"},
-                        "provenance": provenance,
-                    }
-                ],
-                "default_action": {"decision": f"negative_{guideline_index}"},
+                "rules": rules,
+                "default_action": {"decision": f"default_{guideline_index}"},
             }
         )
+
     operators = []
     for index, predicate_id in enumerate(predicate_ids):
-        required = ["observe_p0"] if index > 0 and (seed + index) % 3 == 0 else []
+        required: list[str] = []
+        if index > 0 and (seed % 6 == 0 or (seed + index) % 3 == 0):
+            required = [f"observe_p{index - 1}"]
         operators.append(
             {
                 "id": f"observe_{predicate_id}",
@@ -146,6 +284,28 @@ def generate_semantic_problem(seed: int, directory: Path) -> Path:
                 "cost": f"{1 + (seed + index) % 4}.{(seed * 7 + index) % 10}",
                 "instability": f"0.{(seed + index) % 4}",
                 "required_operator_ids": required,
+                "provenance": provenance,
+            }
+        )
+    if seed % 2 == 1:
+        source_domain = predicate_specs[0][1]
+        operators.append(
+            {
+                "id": "coarse_p0_uwf",
+                "name": "Synthetic unavailable coarsened UWF observation",
+                "output_predicates": [predicate_ids[0]],
+                "granularity": "PRESENCE",
+                "modalities": ["UWF"],
+                "cost": "0.25",
+                "instability": "0.1",
+                "required_operator_ids": [],
+                "value_mappings": {
+                    predicate_ids[0]: {
+                        scalar_key(value): "base" if index == 0 else "alternate"
+                        for index, value in enumerate(source_domain)
+                    }
+                },
+                "availability": "UNAVAILABLE",
                 "provenance": provenance,
             }
         )
@@ -197,6 +357,7 @@ def generate_semantic_problem(seed: int, directory: Path) -> Path:
             "derivations": "derivations.yaml",
             "target_modalities": ["CFP"],
             "instability_weight": f"0.{seed % 3}",
+            "required_operators": ([f"observe_p{predicate_count - 1}"] if seed % 11 == 0 else []),
             "max_states": 128,
             "seed": seed,
             "output": "certificate.json",
@@ -248,14 +409,18 @@ def _check_semantic_case(seed: int, directory: Path) -> dict[str, Any]:
         tuple(scalar_key(state.values[item.id]) for item in ordered) for state in states
     }
     z3_states, z3_actions = _z3_semantic_rows(problem)
+    decision_context = DecisionContext(
+        ontology=problem.ontology,
+        derivations=problem.graph,
+        target_modalities=tuple(problem.config.target_modalities),
+    )
     python_actions = {
         tuple(scalar_key(state.values[item.id]) for item in ordered): tuple(
             action_signature(
                 evaluate_guideline(
                     guideline,
                     state,
-                    problem.ontology,
-                    derivations=problem.graph,
+                    decision_context,
                 )
             )
             for guideline in problem.guidelines
@@ -329,7 +494,12 @@ def run_semantic_generated_matrix(case_count: int = 200) -> dict[str, Any]:
             try:
                 result = _check_semantic_case(seed, case_directory)
             except Exception as exc:  # the gate records and preserves exact failing seeds
-                result = {"seed": seed, "passed": False, "error": repr(exc)}
+                portable_message = str(exc).replace(str(base), "<generated-root>")
+                result = {
+                    "seed": seed,
+                    "passed": False,
+                    "error": f"{type(exc).__name__}({portable_message!r})",
+                }
             results.append(result)
             if not result["passed"]:
                 failures.append(result)
@@ -414,9 +584,21 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         )
         test_count, failed_tests, test_outcomes = _junit_summary(directory / "junit.xml")
         exit_codes = {item["command"]: item["exit_code"] for item in commands["commands"]}
-        command_pass = bool(exit_codes) and all(value == 0 for value in exit_codes.values())
+        missing_commands = [
+            marker
+            for marker in MANDATORY_COMMAND_MARKERS
+            if not any(command.startswith(marker) for command in exit_codes)
+        ]
+        command_pass = (
+            bool(exit_codes)
+            and not missing_commands
+            and all(value == 0 for value in exit_codes.values())
+        )
         coverage_pass = (
-            line >= 92.4229 and branch >= 85.6073 and core_line >= 95 and core_branch >= 90
+            line >= COVERAGE_THRESHOLDS["whole_line"]
+            and branch >= COVERAGE_THRESHOLDS["whole_branch"]
+            and core_line >= COVERAGE_THRESHOLDS["core_line"]
+            and core_branch >= COVERAGE_THRESHOLDS["core_branch"]
         )
         environment_results[version] = {
             "python_version": commands.get("python_version"),
@@ -424,6 +606,12 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             "platform": commands.get("platform"),
             "uv_version": commands.get("uv_version"),
             "commands": commands.get("commands", []),
+            "exit_codes": exit_codes,
+            "durations": {
+                item["command"]: item.get("duration_seconds")
+                for item in commands.get("commands", [])
+            },
+            "missing_mandatory_commands": missing_commands,
             "command_pass": command_pass,
             "test_count": test_count,
             "failed_test_count": failed_tests,
@@ -487,9 +675,25 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         ]
         return bool(outcomes) and all(outcomes)
 
+    def focused_summary(marker: str) -> dict[str, Any]:
+        outcomes = [
+            {"python": version, "test": name, "passed": passed}
+            for version, item in environment_results.items()
+            for name, passed in item["focused_semantic_tests"].items()
+            if marker in name
+        ]
+        return {
+            "case_count": len(outcomes),
+            "passed": bool(outcomes) and all(item["passed"] for item in outcomes),
+            "cases": outcomes,
+        }
+
     commit = _git_value("rev-parse", "HEAD")
+    short_commit = _git_value("rev-parse", "--short=12", "HEAD")
     verification_files = sorted(
-        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{commit}_verification.json")
+        (ROOT / "artifacts" / "review").glob(
+            f"G2LC_DR_STAGE1_6_REVIEW_{short_commit}_verification.json"
+        )
     )
     bundle_verification = (
         json.loads(verification_files[-1].read_text(encoding="utf-8"))
@@ -497,10 +701,10 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         else {"passed": False, "reason": "review bundle not generated yet"}
     )
     archive_files = sorted(
-        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{commit}.zip")
+        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{short_commit}.zip")
     )
     checksum_files = sorted(
-        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{commit}.sha256")
+        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{short_commit}.sha256")
     )
     bundle_artifact = (
         {
@@ -510,6 +714,9 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             "checksum_path": checksum_files[-1].relative_to(ROOT).as_posix()
             if checksum_files
             else None,
+            "checksum_matches": bool(checksum_files)
+            and checksum_files[-1].read_text(encoding="utf-8").split()[0]
+            == sha256_file(archive_files[-1]),
         }
         if archive_files
         else None
@@ -530,18 +737,65 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         and matrix_pass
         and regressions_before is not None
         and bundle_verification.get("passed")
+        and bundle_verification.get("embedded_commit") == commit
+        and bundle_artifact is not None
+        and bundle_artifact.get("checksum_matches")
         else "FAIL"
     )
+    flat_commands = [
+        {"python": version, **command}
+        for version, item in environment_results.items()
+        for command in item["commands"]
+    ]
+    flat_exit_codes = {
+        f"{item['python']}:{item['command']}": item["exit_code"] for item in flat_commands
+    }
+    flat_durations = {
+        f"{item['python']}:{item['command']}": item.get("duration_seconds")
+        for item in flat_commands
+    }
+
+    def minimum_metric(key: str) -> float:
+        return min((float(item[key]) for item in environment_results.values()), default=0.0)
+
+    total_tests = sum(int(item["test_count"]) for item in environment_results.values())
+    total_failures = sum(int(item["failed_test_count"]) for item in environment_results.values())
+    source_branch = _git_value("branch", "--show-current")
+    github_ref = os.environ.get("GITHUB_REF", "")
+    ci_head_sha = os.environ.get("GITHUB_HEAD_SHA")
+    ci_merge_sha = os.environ.get("GITHUB_SHA") if github_ref.startswith("refs/pull/") else None
     payload = {
         "schema_version": "1.0",
         "stage": "1.6",
         "semantic_contract": "action-only-decision-sufficiency-v1.1",
         "starting_commit": "ec3250d7e3dba0379c3b5205949c23e4f4ee5d59",
         "git_commit": commit,
-        "git_branch": _git_value("branch", "--show-current"),
+        "git_branch": source_branch,
+        "source_commit": commit,
+        "source_branch": source_branch,
+        "ci_head_sha": ci_head_sha,
+        "ci_merge_sha": ci_merge_sha,
         "dirty_tracked_worktree": bool(_git_value("status", "--short", "--untracked-files=no")),
         "generator_python_version": platform.python_version(),
+        "python_version": platform.python_version(),
+        "python_versions": {
+            version: item["python_version"] for version, item in environment_results.items()
+        },
+        "uv_version": {
+            version: item["uv_version"] for version, item in environment_results.items()
+        },
         "dependency_lock_hash": sha256_file(ROOT / "uv.lock"),
+        "lock_hash": sha256_file(ROOT / "uv.lock"),
+        "commands": flat_commands,
+        "exit_codes": flat_exit_codes,
+        "durations": flat_durations,
+        "test_count": total_tests,
+        "failure_count": total_failures,
+        "line_coverage": minimum_metric("line_coverage"),
+        "branch_coverage": minimum_metric("branch_coverage"),
+        "core_line_coverage": minimum_metric("core_line_coverage"),
+        "core_branch_coverage": minimum_metric("core_branch_coverage"),
+        "coverage_thresholds": COVERAGE_THRESHOLDS,
         "prechange_snapshot": prechange,
         "failing_regressions_before_fix": regressions_before,
         "required_python_versions": required,
@@ -575,6 +829,21 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             "partial_evaluation_derivations": focused_pass("partial_evaluation"),
             "repair_exactness_and_fail_closed": focused_pass("repair"),
         },
+        "greedy_prerequisite_cases": focused_summary("greedy"),
+        "finite_smt_validation_cases": focused_summary("conflict_validation"),
+        "nonempty_language_cases": focused_summary("empty_evidence_language"),
+        "partial_derivation_cases": focused_summary("partial_evaluation"),
+        "cost_perturbation_cases": matrix.get("randomized_instance_count"),
+        "semantic_generated_cases": semantic.get("semantic_generated_cases"),
+        "semantic_generated_failures": semantic.get("semantic_generated_failures"),
+        "exact_bruteforce_separation_summary": {
+            "finite_vs_bruteforce": matrix.get("finite_vs_bruteforce_results"),
+            "exact_vs_separation": matrix.get("exact_vs_separation_results"),
+        },
+        "repair_equivalence_summary": focused_summary("repair"),
+        "independent_verifier_summary": matrix.get("verifier_independence_check"),
+        "tamper_summary": matrix.get("tamper_matrix_results"),
+        "bundle_summary": bundle_artifact,
         "package_build_results": {
             version: item["package_build_result"] for version, item in environment_results.items()
         },

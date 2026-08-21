@@ -31,8 +31,14 @@ from g2lc.errors import (
     OntologyValidationError,
 )
 from g2lc.guidelines.ast import ClinicalAction, Equals
-from g2lc.guidelines.evaluator import evaluate_guideline
+from g2lc.guidelines.evaluator import (
+    DecisionContext,
+    decision_relevant_completions,
+    decision_relevant_predicates,
+    evaluate_guideline,
+)
 from g2lc.guidelines.validator import validate_guidelines
+from g2lc.ontology.feasibility import feasible_completions
 from g2lc.ontology.models import FeasibilityProgram
 from g2lc.ontology.validator import validate_ontology
 from g2lc.operators.models import DerivationGraph, DerivationRule
@@ -185,11 +191,180 @@ def test_partial_evaluation_applies_deterministic_derivation(minimal_problem) ->
     result = evaluate_guideline(
         guideline,
         EvidenceState(values={"ma_presence": "present"}),
-        minimal_problem.ontology,
-        derivations=graph,
+        DecisionContext(minimal_problem.ontology, graph),
     )
 
     assert [item.values["decision"] for item in result.actions] == ["urgent"]
+
+
+def test_partial_evaluation_requires_explicit_decision_context(minimal_problem) -> None:  # type: ignore[no-untyped-def]
+    with pytest.raises(GuidelineValidationError, match="DecisionContext"):
+        evaluate_guideline(
+            minimal_problem.guidelines[0],
+            EvidenceState(values={"gradable": "yes"}),
+            minimal_problem.ontology,
+        )
+
+
+def test_decision_context_applies_derivations_without_spurious_actions(minimal_problem) -> None:  # type: ignore[no-untyped-def]
+    graph = DerivationGraph(
+        schema_version="1.1",
+        graph_id="decision_context_derivation",
+        version="1.1.0-synthetic",
+        provenance=minimal_problem.graph.provenance,
+        rules=[
+            DerivationRule(
+                id="ma_to_nv_context",
+                input_predicates=["ma_presence"],
+                output_predicates=["nv_presence"],
+                value_mapping={"str:absent": "absent", "str:present": "present"},
+                provenance=minimal_problem.graph.provenance,
+            )
+        ],
+    )
+    context = DecisionContext(
+        ontology=minimal_problem.ontology,
+        derivations=graph,
+        target_modalities=tuple(minimal_problem.config.target_modalities),
+    )
+    guideline = minimal_problem.guidelines[1].model_copy(
+        update={"rules": [minimal_problem.guidelines[1].rules[1]]}
+    )
+
+    result = evaluate_guideline(
+        guideline,
+        EvidenceState(values={"ma_presence": "present"}),
+        context,
+    )
+
+    assert [item.values["decision"] for item in result.actions] == ["urgent"]
+
+
+def test_partial_evaluation_projects_unrelated_ontology_dimensions(minimal_problem) -> None:  # type: ignore[no-untyped-def]
+    noise = minimal_problem.ontology.predicates[0].model_copy(
+        update={
+            "id": "unrelated_noise",
+            "name": "Unrelated partial-evaluation noise",
+            "description": "Must remain existentially quantified.",
+            "requires": [],
+            "recommended_operators": [],
+        }
+    )
+    ontology = minimal_problem.ontology.model_copy(
+        update={"predicates": [*minimal_problem.ontology.predicates, noise]}
+    )
+    context = DecisionContext(ontology, minimal_problem.graph)
+    guideline = minimal_problem.guidelines[0]
+    state = EvidenceState(values={"gradable": "yes", "ma_presence": "present"})
+
+    assert "unrelated_noise" not in decision_relevant_predicates(guideline, context)
+    projected = decision_relevant_completions(guideline, state, context)
+    full = list(feasible_completions(state, ontology, minimal_problem.graph))
+    assert len(projected) == 3
+    assert len(full) > len(projected)
+    assert len(full) % len(projected) == 0
+    assert {item.value("unrelated_noise") for item in projected}.issubset({"yes", "no"})
+
+
+def test_decision_relevant_closure_traverses_every_feasibility_kind(minimal_problem) -> None:  # type: ignore[no-untyped-def]
+    predicates = [
+        minimal_problem.ontology.predicates[0].model_copy(
+            update={
+                "id": f"p{index}",
+                "name": f"Predicate {index}",
+                "description": "Synthetic closure boundary.",
+                "value_type": "BOOLEAN",
+                "allowed_values": [False, True],
+                "requires": [],
+                "recommended_operators": [],
+            }
+        )
+        for index in range(8)
+    ]
+    program = FeasibilityProgram.model_validate(
+        {
+            "schema_version": "1.0",
+            "constraints": [
+                {
+                    "kind": "implication",
+                    "if": {"predicate": "p0", "equals": True},
+                    "then": {"predicate": "p1", "equals": True},
+                },
+                {
+                    "kind": "mutual_exclusion",
+                    "conditions": [
+                        {"predicate": "p1", "equals": True},
+                        {"predicate": "p2", "equals": True},
+                    ],
+                },
+                {
+                    "kind": "exactly_one",
+                    "conditions": [
+                        {"predicate": "p2", "equals": True},
+                        {"predicate": "p3", "equals": True},
+                    ],
+                },
+                {
+                    "kind": "at_most_one",
+                    "conditions": [
+                        {"predicate": "p3", "equals": True},
+                        {"predicate": "p4", "equals": True},
+                    ],
+                },
+                {
+                    "kind": "conditional_allowed",
+                    "if": {"predicate": "p4", "equals": True},
+                    "predicate": "p5",
+                    "allowed_values": [True],
+                },
+                {
+                    "kind": "derived_equality",
+                    "source_predicate": "p5",
+                    "target_predicate": "p6",
+                },
+                {
+                    "kind": "parent_child",
+                    "parent_predicate": "p6",
+                    "child_predicate": "p7",
+                    "when_parent_values": [True],
+                    "allowed_child_values": [True],
+                },
+            ],
+        }
+    )
+    ontology = minimal_problem.ontology.model_copy(
+        update={"predicates": predicates, "feasibility": program}
+    )
+    rule = (
+        minimal_problem.guidelines[0]
+        .rules[0]
+        .model_copy(update={"when": Equals(predicate="p0", value=True)})
+    )
+    guideline = minimal_problem.guidelines[0].model_copy(update={"rules": [rule]})
+
+    assert decision_relevant_predicates(guideline, DecisionContext(ontology)) == {
+        f"p{index}" for index in range(8)
+    }
+
+
+def test_explicit_context_rejects_conflicting_or_invalid_derivation_arguments(
+    minimal_problem: Any,
+) -> None:
+    state = EvidenceState(values={"gradable": "yes"})
+    with pytest.raises(GuidelineValidationError, match="separately"):
+        evaluate_guideline(
+            minimal_problem.guidelines[0],
+            state,
+            DecisionContext(minimal_problem.ontology),
+            derivations=minimal_problem.graph,
+        )
+    with pytest.raises(GuidelineValidationError, match="invalid derivation"):
+        evaluate_guideline(
+            minimal_problem.guidelines[0],
+            state,
+            minimal_problem.ontology,
+            derivations=object(),
+        )
 
 
 def test_smt_conflict_validation_applies_derivations(minimal_problem) -> None:  # type: ignore[no-untyped-def]
@@ -320,7 +495,7 @@ def test_relevant_projection_fails_closed_above_limit(minimal_problem) -> None: 
         enumerate_relevant_states(problem)
 
 
-@pytest.mark.parametrize("seed", [0, 3])
+@pytest.mark.parametrize("seed", range(12))
 def test_generated_feasibility_hash_regression(seed: int, tmp_path: Path) -> None:
     problem = load_compiler_problem(REGRESSION_ROOT / f"seed_{seed:04d}" / "project.yaml")
     solution = compile_problem(problem, SolverKind.EXACT)

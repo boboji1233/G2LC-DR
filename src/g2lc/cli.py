@@ -24,7 +24,7 @@ from g2lc.data.dedup import exact_duplicate_groups
 from g2lc.data.manifest import audit_manifest
 from g2lc.data.splits import write_split_lock
 from g2lc.errors import G2LCError, SourceValidationError
-from g2lc.guidelines.evaluator import evaluate_guideline
+from g2lc.guidelines.evaluator import DecisionContext, evaluate_guideline
 from g2lc.guidelines.parser import load_guidelines
 from g2lc.guidelines.validator import validate_guidelines
 from g2lc.ontology.loader import load_ontology
@@ -100,6 +100,7 @@ def ontology_validate(
 def guideline_validate(
     path: Annotated[Path, typer.Argument(exists=True, readable=True)],
     ontology: Annotated[Path | None, typer.Option("--ontology")] = None,
+    derivations: Annotated[Path | None, typer.Option("--derivations")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Validate one guideline file or every YAML file in a directory."""
@@ -108,11 +109,16 @@ def guideline_validate(
         paths = sorted(path.glob("*.yaml")) if path.is_dir() else [path]
         if not paths:
             raise SourceValidationError("directory contains no YAML guidelines", path=path)
+        if (ontology is None) != (derivations is None):
+            raise SourceValidationError(
+                "--ontology and --derivations must be provided together", path=path
+            )
         evidence = load_ontology(ontology) if ontology is not None else None
+        graph = load_derivation_graph(derivations) if derivations is not None else None
         count = 0
         for item in paths:
             bundle = load_guidelines(item)
-            validate_guidelines(bundle, evidence)
+            validate_guidelines(bundle, evidence, graph)
             count += len(bundle.guidelines)
         _emit({"valid": True, "files": len(paths), "guidelines": count}, json_output)
     except (G2LCError, ValidationError) as exc:
@@ -157,6 +163,9 @@ def guideline_evaluate(
     ontology: Annotated[Path, typer.Option("--ontology", exists=True, dir_okay=False)] = Path(
         "knowledge/evidence_ontology.yaml"
     ),
+    derivations: Annotated[Path, typer.Option("--derivations", exists=True, dir_okay=False)] = Path(
+        "knowledge/derivation_graph.yaml"
+    ),
     guideline_id: Annotated[str | None, typer.Option("--guideline-id")] = None,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
@@ -176,7 +185,14 @@ def guideline_evaluate(
         state_model = EvidenceState.model_validate(
             raw if isinstance(raw, dict) and "values" in raw else {"values": raw}
         )
-        result = evaluate_guideline(candidates[0], state_model, load_ontology(ontology))
+        result = evaluate_guideline(
+            candidates[0],
+            state_model,
+            DecisionContext(
+                ontology=load_ontology(ontology),
+                derivations=load_derivation_graph(derivations),
+            ),
+        )
         _emit(result, json_output)
     except (G2LCError, ValidationError) as exc:
         _fail(exc)

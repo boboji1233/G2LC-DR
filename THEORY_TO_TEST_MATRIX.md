@@ -47,10 +47,10 @@ met, 20 seeded objective comparisons and 66 finite/Z3 scheme comparisons agreed,
 | Greedy omits prerequisite/cost | `test_greedy_selects_and_pays_direct_prerequisite` | greedy, dominance, certificate closure | selected closure and exact cost |
 | Finite conflict sees impossible overlap | `test_finite_conflict_validation_ignores_infeasible_overlap` | finite and SMT guideline validation | same feasibility/derivation context |
 | Empty state space passes vacuously | three `empty_evidence_language` tests | exact, greedy, separation, API, writer, verifier | explicit `UNSAT_EVIDENCE_LANGUAGE` |
-| Partial evaluation ignores derivation | `test_partial_evaluation_applies_derivations` | evaluator and all decision callers | impossible completion excluded |
+| Partial evaluation ignores derivation/context | derivation, fail-loud API, and projection tests | explicit `DecisionContext` and all decision callers | impossible completion excluded; unrelated dimensions existential |
 | Full Cartesian state blow-up | relevant projection regression | dependency closure and projected enumeration | exact optimum unchanged |
 | Repair brute force cannot scale | repair unit/property tests | CP-SAT plus <=18-operator oracle | fail closed above symbolic bound |
-| Cost-only random testing | generated semantic matrix | Python, finite, brute, CP-SAT, Z3, greedy, verifier | >=200 varied problems, zero mismatch |
+| Cost-only random testing | generated semantic matrix | typed domains, all seven constraints, transitive derivation, finite, brute, CP-SAT, Z3, greedy, verifier | >=200 varied problems, zero mismatch |
 | Certificate wording/non-vacuity | rehashed tamper matrix | writer and independent raw verifier | nonempty witness and action distinctions |
 
 The current Stage-1.6 measurements are authoritative only in

@@ -23,6 +23,7 @@ from g2lc.guidelines.ast import (
     expression_predicates,
 )
 from g2lc.guidelines.evaluator import (
+    DecisionContext,
     EvaluationStatus,
     evaluate_expression,
     evaluate_guideline,
@@ -118,7 +119,7 @@ def test_evaluator_numeric_oos_empty_and_trace_paths(minimal_problem) -> None:  
     oos = evaluate_guideline(
         guideline.model_copy(update={"rules": [unknown_rule]}),
         EvidenceState(values={}),
-        ontology,
+        DecisionContext(ontology),
     )
     assert oos.status is EvaluationStatus.OUT_OF_SPEC
     assert oos.unsupported_predicates == ["outside"]
@@ -134,7 +135,7 @@ def test_evaluator_numeric_oos_empty_and_trace_paths(minimal_problem) -> None:  
             "nv_presence": "absent",
         }
     )
-    result = evaluate_guideline(no_default, complete, ontology)
+    result = evaluate_guideline(no_default, complete, DecisionContext(ontology))
     assert result.status is EvaluationStatus.INSUFFICIENT_EVIDENCE
     assert "INSUFFICIENT_EVIDENCE" in trace_signature(result)
 

@@ -1,0 +1,58 @@
+schema_version: '1.0'
+ontology_id: generated_6
+version: 1.0.0-synthetic
+description: Generated bounded semantic differential fixture.
+provenance: &id001
+  source: Stage-1.6 generated semantic seed 6
+  version: 1.0.0-synthetic
+  review_status: SYNTHETIC
+predicates:
+- id: p0
+  name: Synthetic predicate p0
+  description: Generated only for cross-path semantic differential testing.
+  value_type: BOOLEAN
+  allowed_values:
+  - false
+  - true
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p0
+  provenance: *id001
+- id: p1
+  name: Synthetic predicate p1
+  description: Generated only for cross-path semantic differential testing.
+  value_type: INTEGER
+  allowed_values:
+  - 0
+  - 1
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p1
+  provenance: *id001
+- id: p2
+  name: Synthetic predicate p2
+  description: Generated only for cross-path semantic differential testing.
+  value_type: CATEGORICAL
+  allowed_values:
+  - low
+  - high
+  modalities:
+  - CFP
+  observability: IMAGE_OBSERVABLE
+  recommended_operators:
+  - observe_p2
+  provenance: *id001
+feasibility:
+  schema_version: '1.0'
+  constraints:
+  - kind: parent_child
+    parent_predicate: p0
+    child_predicate: p2
+    when_parent_values:
+    - true
+    allowed_child_values:
+    - high

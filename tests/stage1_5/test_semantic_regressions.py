@@ -12,6 +12,7 @@ from g2lc.compiler.result import SolverKind, SolverStatus
 from g2lc.errors import GuidelineValidationError, OperatorValidationError
 from g2lc.guidelines.ast import ClinicalAction, Equals
 from g2lc.guidelines.evaluator import (
+    DecisionContext,
     EvaluationStatus,
     action_signature,
     evaluate_expression,
@@ -63,8 +64,9 @@ def test_same_action_different_trace_has_same_decision_signature(minimal_problem
         }
     )
 
-    left_result = evaluate_guideline(changed, left, minimal_problem.ontology)
-    right_result = evaluate_guideline(changed, right, minimal_problem.ontology)
+    context = DecisionContext(minimal_problem.ontology, minimal_problem.graph)
+    left_result = evaluate_guideline(changed, left, context)
+    right_result = evaluate_guideline(changed, right, context)
 
     assert left_result.matched_clauses != right_result.matched_clauses
     assert action_signature(left_result) == action_signature(right_result)
@@ -91,8 +93,9 @@ def test_default_same_action_as_rule_has_same_decision_signature(minimal_problem
         }
     )
 
-    rule_result = evaluate_guideline(changed, rule_state, minimal_problem.ontology)
-    default_result = evaluate_guideline(changed, default_state, minimal_problem.ontology)
+    context = DecisionContext(minimal_problem.ontology, minimal_problem.graph)
+    rule_result = evaluate_guideline(changed, rule_state, context)
+    default_result = evaluate_guideline(changed, default_state, context)
 
     assert rule_result.matched_clauses != default_result.matched_clauses
     assert action_signature(rule_result) == action_signature(default_result)
@@ -124,7 +127,7 @@ def test_higher_unknown_rule_preserves_possible_action(minimal_problem) -> None:
     result = evaluate_guideline(
         changed,
         EvidenceState(values={"gradable": "yes"}),
-        minimal_problem.ontology,
+        DecisionContext(minimal_problem.ontology, minimal_problem.graph),
     )
 
     assert result.status is EvaluationStatus.ACTION_SET
@@ -160,7 +163,7 @@ def test_unknown_state_key_is_rejected(minimal_problem) -> None:  # type: ignore
         evaluate_guideline(
             minimal_problem.guidelines[0],
             EvidenceState(values={"not_declared": "value"}),
-            minimal_problem.ontology,
+            DecisionContext(minimal_problem.ontology, minimal_problem.graph),
         )
 
 

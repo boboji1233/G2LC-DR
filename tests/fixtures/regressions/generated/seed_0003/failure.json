@@ -1,1 +1,1 @@
-{"error":"CertificateVerificationError('semantic hash payload mismatch')","passed":false,"seed":3}
+{"error":"SourceValidationError('<generated-root>/seed_0003/ontology.yaml: predicates.2.value_type rejected STRING; expected a declared finite scalar type')","passed":false,"seed":3}

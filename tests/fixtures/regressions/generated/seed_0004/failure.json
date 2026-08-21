@@ -1,0 +1,1 @@
+{"error":"SourceValidationError('<generated-root>/seed_0004/ontology.yaml: predicates.1 and predicates.4 rejected STRING; expected declared finite scalar types')","passed":false,"seed":4}
