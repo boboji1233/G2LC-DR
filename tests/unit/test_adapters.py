@@ -11,13 +11,15 @@ from g2lc.errors import SourceValidationError
 def test_required_adapter_registry_is_complete() -> None:
     assert set(SPECS) == {
         "ddr",
+        "messidor1",
+        "maples_dr",
         "mmrdr_cfp",
         "mmrdr_uwf",
         "idrid",
         "deepdrid",
         "fgadr",
-        "maples_messidor",
         "retinal_lesions",
+        "tjdr",
     }
 
 

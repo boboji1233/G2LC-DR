@@ -1,10 +1,12 @@
 dataset_id,source_url,license,access_type,redistribution_allowed,commercial_use,downloaded_at,approval_status,source_family
-ddr,https://github.com/nkicsl/DDR-dataset,verify-from-source,official-link,false,verify,false,not_downloaded,OIA_DDR
-mmrdr,https://figshare.com/articles/dataset/MMRDR/29423747,verify-from-source,public,false,verify,false,not_downloaded,OIA_DDR
-idrid,https://idrid.grand-challenge.org/Data/,verify-from-source,registration,false,verify,false,not_downloaded,IDRID
-deepdrid,https://github.com/deepdrdoc/DeepDRiD,CC-BY-SA-4.0,public,verify,verify,false,not_downloaded,DEEPDRID
-fgadr,https://csyizhou.github.io/FGADR/,research-use-agreement,request,false,false,false,not_requested,FGADR
-maples_dr,https://figshare.com/articles/dataset/24328660,verify-from-source,public-labels,false,verify,false,not_downloaded,MESSIDOR1
 messidor1,https://www.adcis.net/en/third-party/messidor/,research-request,request,false,verify,false,not_requested,MESSIDOR1
-retinal_lesions,https://github.com/WeiQijie/retinal-lesions,verify-from-source,request,false,verify,false,not_requested,EYEPACS_RLDR
+maples_dr,https://figshare.com/articles/dataset/24328660,verify-current-terms,public,false,verify,false,not_downloaded,MESSIDOR1
+ddr,https://github.com/nkicsl/DDR-dataset,verify-from-source,public,false,verify,false,not_downloaded,OIA_DDR
+mmrdr_cfp,https://figshare.com/articles/dataset/MMRDR/29423747,CC-BY-4.0-v2-verify-files,public,true,verify,false,not_downloaded,OIA_DDR
+mmrdr_uwf,https://figshare.com/articles/dataset/MMRDR/29423747,CC-BY-4.0-v2-verify-files,public,true,verify,false,not_downloaded,MMRDR_UWF
+idrid,https://idrid.grand-challenge.org/Data/,registration-terms,registration,false,verify,false,not_requested,IDRID
+deepdrid,https://github.com/deepdrdoc/DeepDRiD,CC-BY-SA-4.0-recheck-files,public,verify,verify,false,not_downloaded,DEEPDRID
+fgadr,https://csyizhou.github.io/FGADR/,research-use-agreement,request,false,false,false,not_requested,FGADR
+retinal_lesions,https://github.com/WeiQijie/retinal-lesions,official-request-form,request,false,verify,false,not_requested,EYEPACS_RLDR
+tjdr,https://github.com/NekoPii/TJDR,Apache-2.0-recheck-data-files,public,verify,verify,false,not_downloaded,TJDR
 

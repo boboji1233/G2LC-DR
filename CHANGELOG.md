@@ -5,6 +5,23 @@ made any clinical-validation or experiment-result claim.
 
 ## [Unreleased]
 
+### Stage 2A data governance and Oracle-input readiness
+
+- Added six versioned, hashed and provenanced Parquet relations with deterministic IDs,
+  referential validation, explicit annotation granularity, and a lossless legacy migration.
+- Expanded evidence status to preserve `AMBIGUOUS`, `NOT_APPLICABLE`, `WEAK`, and
+  `DERIVED` without conflating missingness with negative evidence.
+- Added a ten-dataset public access ledger and local-only adapters with explicit ready,
+  missing, licence, version, and schema states; no acquisition or clinical parsing occurs.
+- Locked DDR/MMRDR-CFP and MESSIDOR/MAPLES source families, prohibited every MAPLES
+  selection use, and added patient/eye/visit/duplicate group leakage checks.
+- Added exact-file, decoded-pixel, pHash and dHash duplicate evidence, deterministic
+  groups and review artifacts; automatic deletion is disabled and embeddings are not run.
+- Added the Stage 2A CLI, adversarial synthetic tests, tracked-tree safety scan,
+  dual-Python gate, CI integration, package audit, and commit-bound review bundle.
+- Added ADR-0006 and the immutable starting-baseline record. No dataset, Oracle result,
+  model, training code, checkpoint, metric, or experiment result was added.
+
 ### Stage 1.6.1 packaging hygiene
 
 - Replaced implicit sdist discovery with an explicit Hatch include/exclude policy and

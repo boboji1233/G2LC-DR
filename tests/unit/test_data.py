@@ -27,7 +27,7 @@ def test_missing_evidence_value_is_none() -> None:
 
 
 def test_license_registry_is_structurally_valid() -> None:
-    assert validate_license_registry("data/licenses.csv") == 8
+    assert validate_license_registry("data/licenses.csv") == 10
 
 
 def test_split_lock_is_deterministic(tmp_path) -> None:  # type: ignore[no-untyped-def]

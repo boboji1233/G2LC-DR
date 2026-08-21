@@ -54,11 +54,12 @@ feasibility, derivation, modality, and guideline semantics.
 | `examples/synthetic/*` | EX00, P0, launch objective §10 | Minimal, missing-evidence, OOS, and Stage-1.5 fixture matrix |
 | `tests/unit`, `tests/guidelines` | C-04, D Gate, §12 | At least 30 focused unit and 10 semantics tests |
 | `tests/property` | C-04, D Gate, §12 | At least 10 Hypothesis properties |
-| `src/g2lc/data/manifest.py`, `labels.py` | A-03/F-01, §8.1–§8.2 | Typed metadata and POSITIVE/NEGATIVE/UNKNOWN |
-| `src/g2lc/data/splits.py` | F-01, §8.7, §18.1 | Patient/source-family locks and MAPLES test lock |
-| `src/g2lc/data/dedup.py` | F-01, §8.5–§8.6 | SHA-256 audit first; optional later stages explicit |
-| `src/g2lc/data/license_registry.py` | A-02/A-03, §6.3 | Access/license metadata without gated download |
-| `src/g2lc/data/adapters/*` | F-01, user objective §14 | Metadata-only adapters after Stage 1 acceptance |
+| `src/g2lc/data/schemas.py`, `builder.py` | A-03/F-01, §8.1–§8.4 | Six hashed/provenanced Parquet relations and lossless v1 migration |
+| `src/g2lc/data/splits.py` | F-01, §8.7, §18.1 | Patient/eye/visit/duplicate groups, family policy, MAPLES final-test lock |
+| `src/g2lc/data/dedup.py` | F-01, §8.5–§8.6 | File/pixel/pHash/dHash audit, deterministic groups, review-only candidates, no deletion |
+| `src/g2lc/data/registry.py`, `data/dataset_registry.yaml` | A-02/A-03, §6.3 | Versioned public access/licence ledger without acquisition side effects |
+| `src/g2lc/data/adapters/*` | F-01, user objective §14 | Ten local-only adapters with five explicit readiness states |
+| `scripts/stage2a_gate.py`, `src/g2lc/audit/stage2a.py` | WP0, Gate E inputs | Dual-Python recorded gate, scans, packages, commit-bound review |
 | `src/g2lc/experiments/*`, `metrics/*` | §16, §20–§22 | Non-fabricated schemas after Oracle/data gates |
 | `docs/claim_contract.md` | B-02, §1, §4 | Frozen allowed/non-allowed claims |
 | `docs/data_access.md`, `data_access_log.md` | A-02, §6 | Official acquisition actions; no auto gated download |
@@ -85,9 +86,11 @@ feasibility, derivation, modality, and guideline semantics.
    bounded exact repair, generated semantic differential testing, and commit-bound review.
    Gate: `artifacts/audit/stage1_6/gate.json` is `PASS`; GitHub Actions and human review
    remain separate merge conditions.
-7. **Stage 2 — data metadata only (A-02/A-03/F-01):** remains frozen for this task;
-   later work also requires explicit authorization and legal local inputs. Missing gated
-   datasets remain `BLOCKED`; no synthetic substitute.
+7. **Stage 2A — data governance/Oracle-input readiness (A-02/A-03/F-01):** six
+   relational schemas, ten local adapters, public access ledger, source-family locks,
+   MAPLES final-test prohibition, duplicate review, target-blind split locks, CLI and
+   portable gate. Missing datasets remain explicit non-ready states; no synthetic
+   substitute, Oracle execution, model, or training.
 8. **Stage 3 — Oracle (E-01–E-04):** begins only after legal data access and split
    locks. Gate E determines whether any visual model work is scientifically valid.
 9. **Later stages F–I:** visual evidence, baselines, experiments and paper outputs
@@ -150,5 +153,15 @@ tests for both archive types, and matching member sets across the two required P
 environments. The archive cannot contain its own digest: the embedded gate uses
 `EXTERNALIZED`, and the external `.sha256` plus `_final_metadata.json` are authoritative.
 
-Stage 2, Oracle, real-data parsing, and visual training remain frozen until a separately
-authorized task begins.
+## Stage 2A acceptance
+
+```bash
+uv run --python 3.11 python scripts/stage2a_gate.py
+uv run --python 3.12 python scripts/stage2a_gate.py
+uv run --python 3.12 g2lc audit stage2a --required-pythons 3.11,3.12 --json
+```
+
+The gate runs Stage 1.6.1 first and requires recorded success for schema/migration,
+all-adapter, unknown-preservation, source-family, MAPLES leakage, duplicate, and CLI
+tests plus tracked-tree scanning, isolated packages, installed smoke tests, and the
+commit-bound review archive. Oracle and visual training remain frozen.

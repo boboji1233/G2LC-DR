@@ -93,6 +93,8 @@ Generated medical images, raw/interim/processed data and model checkpoints are e
 from Git. Contributions that add guideline clauses must include provenance, version,
 review status, boundary tests and an impact diff.
 
-The authoritative Stage-1.6 outcome is
-`artifacts/audit/stage1_6/gate.json`. Real-data parsing, Oracle experiments, and visual
-model work remain frozen in this session regardless of the synthetic software gate.
+The authoritative Stage-1.6 prerequisite is `artifacts/audit/stage1_6/gate.json`; the
+Stage-2A governance result is `artifacts/audit/stage2a/gate.json`. Stage 2A inventories
+only legally supplied local files into versioned metadata and runs leakage/duplicate
+audits. Source-specific clinical parsing, Oracle execution, experiments, and visual
+model work remain frozen.

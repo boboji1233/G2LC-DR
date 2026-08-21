@@ -7,6 +7,26 @@ from g2lc.errors import SourceValidationError
 from g2lc.types import Modality
 
 SPECS = {
+    "messidor1": AdapterSpec(
+        dataset_id="messidor1",
+        source_family="MESSIDOR1",
+        default_modality=Modality.CFP,
+        license_id="messidor1",
+        warnings=(
+            "Use original MESSIDOR-1, never MESSIDOR-2, for MAPLES correspondence.",
+            "All MAPLES-corresponding cases are locked same-case final tests.",
+        ),
+        maples_test_locked=True,
+        license_confirmation_required=True,
+    ),
+    "maples_dr": AdapterSpec(
+        dataset_id="maples_dr",
+        source_family="MESSIDOR1",
+        default_modality=Modality.CFP,
+        license_id="maples_dr",
+        warnings=("MAPLES-DR and MESSIDOR-1 are the same underlying image family.",),
+        maples_test_locked=True,
+    ),
     "ddr": AdapterSpec(
         dataset_id="ddr",
         source_family="OIA_DDR",
@@ -40,6 +60,7 @@ SPECS = {
             ("C_Localization",),
         ),
         warnings=("Use official splits; an unlabelled task/image remains UNKNOWN.",),
+        license_confirmation_required=True,
     ),
     "deepdrid": AdapterSpec(
         dataset_id="deepdrid",
@@ -57,17 +78,7 @@ SPECS = {
         warnings=(
             "Research-use agreement data and personal download links must not be redistributed.",
         ),
-    ),
-    "maples_messidor": AdapterSpec(
-        dataset_id="maples_messidor",
-        source_family="MESSIDOR1",
-        default_modality=Modality.CFP,
-        license_id="maples_dr",
-        warnings=(
-            "All 198 MAPLES/MESSIDOR cases are locked final test data.",
-            "MESSIDOR-2 cannot substitute for original MESSIDOR-1 images.",
-        ),
-        maples_test_locked=True,
+        license_confirmation_required=True,
     ),
     "retinal_lesions": AdapterSpec(
         dataset_id="retinal_lesions",
@@ -75,15 +86,25 @@ SPECS = {
         default_modality=Modality.CFP,
         license_id="retinal_lesions",
         warnings=("Audit against EyePACS because Retinal-Lesions is an EyePACS subset.",),
+        license_confirmation_required=True,
+    ),
+    "tjdr": AdapterSpec(
+        dataset_id="tjdr",
+        source_family="TJDR",
+        default_modality=Modality.CFP,
+        license_id="tjdr",
+        warnings=("Only source-file structure is inventoried; filenames never supply diagnoses.",),
     ),
 }
+
+ALIASES = {"maples_messidor": "maples_dr"}
 
 
 def adapter_for(dataset_id: str) -> MetadataAdapter:
     """Return a metadata adapter or an actionable supported-ID error."""
 
     try:
-        return MetadataAdapter(SPECS[dataset_id])
+        return MetadataAdapter(SPECS[ALIASES.get(dataset_id, dataset_id)])
     except KeyError as exc:
         raise SourceValidationError(
             f"unsupported adapter {dataset_id!r}; choose one of {sorted(SPECS)}"

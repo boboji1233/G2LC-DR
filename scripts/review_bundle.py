@@ -180,7 +180,10 @@ def _archive_bytes(path: Path, final_metadata_name: str) -> bytes:
     if path.suffix == ".json":
         with suppress(UnicodeDecodeError, json.JSONDecodeError):
             payload = json.loads(content.decode("utf-8"))
-            if relative == "artifacts/audit/stage1_6/gate.json":
+            if relative in {
+                "artifacts/audit/stage1_6/gate.json",
+                "artifacts/audit/stage2a/gate.json",
+            }:
                 payload = _externalize_gate(payload, final_metadata_name)
             return (
                 json.dumps(
@@ -261,7 +264,9 @@ def _verification_basetemp(run_id: str) -> Path:
     return ROOT.parent / ".review-pytest" / run_id
 
 
-def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str) -> dict[str, Any]:
+def _verify_archive(
+    archive: Path, expected: dict[str, str], metadata_name: str, stage: str
+) -> dict[str, Any]:
     run_id = uuid.uuid4().hex
     destination = ROOT / ".review-verify" / run_id
     basetemp = _verification_basetemp(run_id)
@@ -275,7 +280,8 @@ def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str)
         if not (destination / path).is_file() or _hash(destination / path) != digest
     ]
     metadata = json.loads((destination / metadata_name).read_text(encoding="utf-8"))
-    embedded_gate_path = destination / "artifacts" / "audit" / "stage1_6" / "gate.json"
+    audit_name = "stage2a" if stage == "2a" else "stage1_6"
+    embedded_gate_path = destination / "artifacts" / "audit" / audit_name / "gate.json"
     embedded_gate = (
         json.loads(embedded_gate_path.read_text(encoding="utf-8"))
         if embedded_gate_path.is_file()
@@ -294,7 +300,7 @@ def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str)
             "-q",
             "--basetemp",
             str(basetemp),
-            "tests/stage1_6/test_cross_path_regressions.py",
+            "tests/stage2a" if stage == "2a" else "tests/stage1_6/test_cross_path_regressions.py",
         ],
         cwd=destination,
         env=environment,
@@ -317,7 +323,7 @@ def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str)
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--stage", choices=["1.5", "1.6", "1.6.1"], default="1.6.1")
+    parser.add_argument("--stage", choices=["1.5", "1.6", "1.6.1", "2a"], default="1.6.1")
     parser.add_argument(
         "--finalize",
         action="store_true",
@@ -338,7 +344,7 @@ def main() -> int:
     if git_available and _git("status", "--short", "--untracked-files=no"):
         raise RuntimeError("review bundle requires a clean tracked worktree")
     selected = _files(stage, git_available=git_available)
-    stage_token = stage.replace(".", "_")
+    stage_token = "2A" if stage == "2a" else stage.replace(".", "_")
     stem = (
         f"G2LC_DR_STAGE{stage_token}_REVIEW_{short_head}"
         if git_available
@@ -381,7 +387,7 @@ def main() -> int:
             bundle.writestr(relative, content)
         bundle.writestr(f"{stem}_manifest.tsv", manifest_text)
         bundle.writestr(metadata_name, metadata_text)
-    verification = _verify_archive(archive, expected, metadata_name)
+    verification = _verify_archive(archive, expected, metadata_name, stage)
     if not verification["passed"]:
         raise RuntimeError(f"review bundle verification failed: {verification}")
     digest = _hash(archive)
