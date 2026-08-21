@@ -1,0 +1,132 @@
+schema_version: "1.0"
+datasets:
+  - dataset_id: messidor1
+    official_name: MESSIDOR (original MESSIDOR-1)
+    official_landing_page: https://www.adcis.net/en/third-party/messidor/
+    official_publication: https://doi.org/10.5566/ias.1155
+    access_mode: REQUEST
+    application_status: NOT_REQUESTED
+    license_access_class: research-request
+    redistribution_restrictions: Do not redistribute images; follow current ADCIS terms.
+    source_family: MESSIDOR1
+    patient_id_availability: UNKNOWN
+    expected_local_layout: [Original MESSIDOR-1 image volumes; never MESSIDOR-2]
+    last_checked_date: 2026-08-21
+    next_owner_action: Submit the official ADCIS research-use request and retain no private correspondence in Git.
+  - dataset_id: maples_dr
+    official_name: MAPLES-DR labels for MESSIDOR
+    official_landing_page: https://figshare.com/articles/dataset/24328660
+    official_publication: https://doi.org/10.1038/s41597-024-03739-6
+    access_mode: PUBLIC
+    application_status: NOT_DOWNLOADED
+    license_access_class: verify-current-Figshare-terms
+    redistribution_restrictions: Verify the current file-level licence before redistributing labels or derived metadata.
+    source_family: MESSIDOR1
+    patient_id_availability: UNKNOWN
+    expected_local_layout: [Official MAPLES-DR label release and optional AdditionalData archive]
+    last_checked_date: 2026-08-21
+    next_owner_action: Recheck the current Figshare licence, then perform an explicit user-controlled download.
+  - dataset_id: ddr
+    official_name: OIA-DDR / DDR dataset
+    official_landing_page: https://github.com/nkicsl/DDR-dataset
+    official_publication: https://arxiv.org/abs/1905.11856
+    access_mode: PUBLIC
+    application_status: NOT_DOWNLOADED
+    license_access_class: verify-from-official-source
+    redistribution_restrictions: Do not redistribute until the current official terms have been reviewed.
+    source_family: OIA_DDR
+    patient_id_availability: UNKNOWN
+    expected_local_layout: [Official extracted image files and source annotation tables]
+    last_checked_date: 2026-08-21
+    next_owner_action: Recheck current official terms and explicitly acquire the files; record archive hashes locally.
+  - dataset_id: mmrdr_cfp
+    official_name: MMRDR CFP subset (sourced from OIA-DDR)
+    official_landing_page: https://figshare.com/articles/dataset/MMRDR/29423747
+    official_publication: https://doi.org/10.1038/s41597-026-07005-9
+    access_mode: PUBLIC
+    application_status: NOT_DOWNLOADED
+    license_access_class: CC-BY-4.0-Figshare-v2; verify-file-level-exceptions
+    redistribution_restrictions: Preserve attribution and licence notices; verify each file before redistribution.
+    source_family: OIA_DDR
+    patient_id_availability: UNKNOWN
+    expected_local_layout: [Official MMRDR CFP files and verified source tables]
+    last_checked_date: 2026-08-21
+    next_owner_action: Recheck file-level terms and acquire explicitly; treat DDR and MMRDR-CFP as one family.
+  - dataset_id: mmrdr_uwf
+    official_name: MMRDR ultra-widefield subset
+    official_landing_page: https://figshare.com/articles/dataset/MMRDR/29423747
+    official_publication: https://doi.org/10.1038/s41597-026-07005-9
+    access_mode: PUBLIC
+    application_status: NOT_DOWNLOADED
+    license_access_class: CC-BY-4.0-Figshare-v2; verify-file-level-exceptions
+    redistribution_restrictions: Preserve attribution and licence notices; verify each file before redistribution.
+    source_family: MMRDR_UWF
+    patient_id_availability: EXPECTED_UNVERIFIED
+    expected_local_layout: [Official MMRDR UWF files and verified source tables]
+    last_checked_date: 2026-08-21
+    next_owner_action: Recheck file-level terms and acquire explicitly; verify patient grouping before any split.
+  - dataset_id: idrid
+    official_name: Indian Diabetic Retinopathy Image Dataset (IDRiD)
+    official_landing_page: https://idrid.grand-challenge.org/Data/
+    official_publication: https://doi.org/10.3390/data3030025
+    access_mode: REGISTRATION
+    application_status: NOT_REQUESTED
+    license_access_class: IEEE-DataPort-registration-terms
+    redistribution_restrictions: Do not redistribute; preserve official task splits and terms.
+    source_family: IDRID
+    patient_id_availability: UNKNOWN
+    expected_local_layout: [A_Segmentation, B_Disease_Grading, C_Localization]
+    last_checked_date: 2026-08-21
+    next_owner_action: Register, review and accept current official terms, then download through the official workflow.
+  - dataset_id: deepdrid
+    official_name: DeepDRiD
+    official_landing_page: https://github.com/deepdrdoc/DeepDRiD
+    official_publication: https://doi.org/10.1016/j.patter.2022.100512
+    access_mode: PUBLIC
+    application_status: NOT_DOWNLOADED
+    license_access_class: CC-BY-SA-4.0-recheck-source-files
+    redistribution_restrictions: Follow repository and large-file terms; do not expose restricted local metadata.
+    source_family: DEEPDRID
+    patient_id_availability: EXPECTED_UNVERIFIED
+    expected_local_layout: [regular_fundus_images or ultra-widefield_images]
+    last_checked_date: 2026-08-21
+    next_owner_action: Recheck repository/LFS terms, explicitly acquire, and verify patient-eye-view identifiers.
+  - dataset_id: fgadr
+    official_name: Fine-Grained Annotated Diabetic Retinopathy (FGADR) Seg-set
+    official_landing_page: https://csyizhou.github.io/FGADR/
+    official_publication: https://arxiv.org/abs/2008.09772
+    access_mode: REQUEST
+    application_status: NOT_REQUESTED
+    license_access_class: research-use-agreement
+    redistribution_restrictions: No redistribution; never commit signed forms, private email, links, images, or recoverable derivatives.
+    source_family: FGADR
+    patient_id_availability: UNKNOWN
+    expected_local_layout: [Official Seg-set supplied after approval]
+    last_checked_date: 2026-08-21
+    next_owner_action: Review and sign the official agreement outside Git, then submit the official access request.
+  - dataset_id: retinal_lesions
+    official_name: Retinal-Lesions
+    official_landing_page: https://github.com/WeiQijie/retinal-lesions
+    official_publication: https://arxiv.org/abs/1912.11619
+    access_mode: REQUEST
+    application_status: NOT_REQUESTED
+    license_access_class: official-request-form
+    redistribution_restrictions: No redistribution without verified permission; source images overlap EyePACS.
+    source_family: EYEPACS_RLDR
+    patient_id_availability: UNKNOWN
+    expected_local_layout: [Official requested image, grade, and eight-class lesion files]
+    last_checked_date: 2026-08-21
+    next_owner_action: Submit the official request form and later audit all images against EyePACS duplicates.
+  - dataset_id: tjdr
+    official_name: TJDR high-quality pixel-level DR annotation dataset
+    official_landing_page: https://github.com/NekoPii/TJDR
+    official_publication: https://arxiv.org/abs/2312.15389
+    access_mode: PUBLIC
+    application_status: NOT_DOWNLOADED
+    license_access_class: Apache-2.0-repository; verify-data-file-terms
+    redistribution_restrictions: Verify current data-file terms before redistribution; never expose private local metadata.
+    source_family: TJDR
+    patient_id_availability: NOT_AVAILABLE
+    expected_local_layout: [Official train/test images and four-class pixel annotations]
+    last_checked_date: 2026-08-21
+    next_owner_action: Recheck repository and linked-host file terms, then perform an explicit user-controlled acquisition.

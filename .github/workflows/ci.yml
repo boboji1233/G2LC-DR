@@ -31,14 +31,19 @@ jobs:
         run: |
           git worktree add ../g2lc-stage1-6-baseline ec3250d7e3dba0379c3b5205949c23e4f4ee5d59
           uv run --python ${{ matrix.python-version }} python scripts/stage1_6_capture_baseline.py ../g2lc-stage1-6-baseline
-      - run: uv run --python ${{ matrix.python-version }} python scripts/stage1_6_gate.py
+      - name: Run Stage 2A governance gate (including Stage 1.6.1 first)
+        env:
+          G2LC_REQUIRED_PYTHONS: ${{ matrix.python-version }}
+        run: uv run --python ${{ matrix.python-version }} python scripts/stage2a_gate.py
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: stage1-6-audit-py${{ matrix.python-version }}
+          name: stage2a-audit-py${{ matrix.python-version }}
           path: |
             artifacts/audit/stage1_6/
+            artifacts/audit/stage2a/
             artifacts/review/G2LC_DR_STAGE1_6_1_REVIEW_*
+            artifacts/review/G2LC_DR_STAGE2A_REVIEW_*
 
   semantic-stress:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

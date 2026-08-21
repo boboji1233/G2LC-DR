@@ -48,11 +48,15 @@ class ValueType(StrEnum):
 
 
 class EvidenceLabel(StrEnum):
-    """Dataset label state; UNKNOWN is distinct from NEGATIVE."""
+    """Dataset label state; UNKNOWN and AMBIGUOUS are never negative."""
 
     POSITIVE = "POSITIVE"
     NEGATIVE = "NEGATIVE"
     UNKNOWN = "UNKNOWN"
+    AMBIGUOUS = "AMBIGUOUS"
+    NOT_APPLICABLE = "NOT_APPLICABLE"
+    WEAK = "WEAK"
+    DERIVED = "DERIVED"
 
 
 class ReviewStatus(StrEnum):

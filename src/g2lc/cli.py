@@ -16,15 +16,28 @@ from g2lc import __version__
 from g2lc.audit.stage1_5 import generate_gate as generate_stage1_5_gate
 from g2lc.audit.stage1_5 import run_synthetic_matrix
 from g2lc.audit.stage1_6 import generate_gate as generate_stage1_6_gate
+from g2lc.audit.stage2a import generate_gate as generate_stage2a_gate
 from g2lc.certificates.verifier import verify_certificate
 from g2lc.certificates.writer import build_certificate, write_certificate
 from g2lc.compiler.api import compile_problem
 from g2lc.compiler.problem import load_compiler_problem
 from g2lc.compiler.result import SolverKind
 from g2lc.data.adapters import adapter_for
-from g2lc.data.dedup import exact_duplicate_groups
+from g2lc.data.builder import build_manifest_from_local_root
+from g2lc.data.dedup import audit_duplicate_bundle, exact_duplicate_groups
 from g2lc.data.manifest import audit_manifest
-from g2lc.data.splits import write_split_lock
+from g2lc.data.registry import (
+    access_plan,
+    inspect_registry_status,
+    load_dataset_registry,
+)
+from g2lc.data.schemas import load_manifest_bundle, validate_manifest_bundle
+from g2lc.data.splits import (
+    create_relational_split_plan,
+    verify_relational_split_lock,
+    write_relational_split_lock,
+    write_split_lock,
+)
 from g2lc.errors import G2LCError, SourceValidationError
 from g2lc.guidelines.evaluator import DecisionContext, evaluate_guideline
 from g2lc.guidelines.parser import load_guidelines
@@ -75,6 +88,24 @@ def _emit(value: Any, json_output: bool) -> None:
 def _fail(exc: Exception) -> None:
     error_console.print(f"[red]ERROR[/red] {exc}")
     raise typer.Exit(code=2)
+
+
+def _root_mapping(path: Path | None) -> dict[str, str]:
+    if path is None:
+        return {}
+    raw = load_yaml(path)
+    if not isinstance(raw, dict):
+        raise SourceValidationError("root map must be a YAML mapping", path=path)
+    roots = raw.get("roots", raw)
+    if not isinstance(roots, dict) or not all(
+        isinstance(key, str) and isinstance(value, str) for key, value in roots.items()
+    ):
+        raise SourceValidationError("root map values must be dataset_id: local_path", path=path)
+    return dict(roots)
+
+
+def _confirmed_ids(value: str) -> set[str]:
+    return {item.strip() for item in value.split(",") if item.strip()}
 
 
 @app.command("version")
@@ -326,6 +357,211 @@ def audit_stage1_6(
             [item.strip() for item in required_pythons.split(",")] if required_pythons else None
         )
         _emit(generate_stage1_6_gate(output, required), json_output)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@audit_app.command("stage2a")
+def audit_stage2a(
+    output: Annotated[Path, typer.Option("--output")] = Path("artifacts/audit/stage2a/gate.json"),
+    required_pythons: Annotated[str | None, typer.Option("--required-pythons")] = None,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Aggregate recorded Stage-2A governance evidence and finalized review hashes."""
+
+    try:
+        required = (
+            [item.strip() for item in required_pythons.split(",")] if required_pythons else None
+        )
+        gate = generate_stage2a_gate(output, required, require_review=True)
+        _emit(gate, json_output)
+        if gate["final_status"] != "PASS":
+            raise typer.Exit(code=1)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@data_app.command("status")
+def data_status(
+    registry_path: Annotated[
+        Path, typer.Option("--registry", exists=True, dir_okay=False, readable=True)
+    ] = Path("data/dataset_registry.yaml"),
+    roots: Annotated[
+        Path | None, typer.Option("--roots", exists=True, dir_okay=False, readable=True)
+    ] = None,
+    license_confirmed: Annotated[
+        str, typer.Option("--license-confirmed", help="Comma-separated dataset IDs.")
+    ] = "",
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Join the public access ledger to truthful local adapter states."""
+
+    try:
+        registry = load_dataset_registry(registry_path)
+        statuses = inspect_registry_status(
+            registry,
+            _root_mapping(roots),
+            license_confirmed=_confirmed_ids(license_confirmed),
+        )
+        _emit({"datasets": [item.model_dump(mode="json") for item in statuses]}, json_output)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@data_app.command("inspect-root")
+def data_inspect_root(
+    dataset_id: Annotated[str, typer.Argument()],
+    local_path: Annotated[Path, typer.Argument()],
+    license_confirmed: Annotated[bool, typer.Option("--license-confirmed")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Inspect one local dataset root without downloading or modifying it."""
+
+    try:
+        inspection = adapter_for(dataset_id).inspect_root(
+            local_path, license_confirmed=license_confirmed
+        )
+        _emit(inspection, json_output)
+        if inspection.state.value != "READY":
+            raise typer.Exit(code=1)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@data_app.command("build-manifest")
+def data_build_manifest(
+    dataset_id: Annotated[str, typer.Argument()],
+    local_path: Annotated[Path, typer.Argument()],
+    output: Annotated[Path, typer.Argument()],
+    registry_path: Annotated[
+        Path, typer.Option("--registry", exists=True, dir_okay=False, readable=True)
+    ] = Path("data/dataset_registry.yaml"),
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    license_confirmed: Annotated[bool, typer.Option("--license-confirmed")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Inventory a local root into six provenance-safe relations."""
+
+    try:
+        entry = load_dataset_registry(registry_path).entry(dataset_id)
+        _emit(
+            build_manifest_from_local_root(
+                entry,
+                local_path,
+                output,
+                dry_run=dry_run,
+                license_confirmed=license_confirmed,
+            ),
+            json_output,
+        )
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@data_app.command("validate-manifest")
+def data_validate_manifest(
+    manifest: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Validate schema, hashes, references, and split leakage policy."""
+
+    try:
+        report = validate_manifest_bundle(manifest)
+        _emit(report, json_output)
+        if not report.valid:
+            raise typer.Exit(code=1)
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@data_app.command("audit-duplicates")
+def data_audit_duplicates(
+    manifest: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    output: Annotated[Path, typer.Argument()],
+    phash_threshold: Annotated[int, typer.Option("--phash-threshold", min=0, max=64)] = 8,
+    dhash_threshold: Annotated[int, typer.Option("--dhash-threshold", min=0, max=64)] = 8,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Audit exact, decoded-pixel, pHash, and dHash duplicate evidence."""
+
+    try:
+        _emit(
+            audit_duplicate_bundle(
+                manifest,
+                output,
+                phash_threshold=phash_threshold,
+                dhash_threshold=dhash_threshold,
+            ),
+            json_output,
+        )
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@data_app.command("create-split")
+def data_create_split(
+    manifest: Annotated[Path, typer.Argument(exists=True, file_okay=False, readable=True)],
+    output: Annotated[Path, typer.Argument()],
+    train_percent: Annotated[int, typer.Option("--train-percent", min=1, max=98)] = 70,
+    validation_percent: Annotated[int, typer.Option("--validation-percent", min=1, max=98)] = 15,
+    dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Create a target-blind, group-aware split proposal or immutable lock."""
+
+    try:
+        plan = create_relational_split_plan(
+            load_manifest_bundle(manifest),
+            train_percent=train_percent,
+            validation_percent=validation_percent,
+        )
+        lock_path = None if dry_run else write_relational_split_lock(plan, output)
+        _emit(
+            {
+                "dry_run": dry_run,
+                "assignments": len(plan.assignments),
+                "split_hash": plan.split_hash,
+                "lock_file": str(lock_path) if lock_path is not None else None,
+                "target_labels_opened": False,
+            },
+            json_output,
+        )
+    except (G2LCError, ValidationError, OSError, ValueError) as exc:
+        _fail(exc)
+
+
+@data_app.command("verify-split-lock")
+def data_verify_split_lock(
+    lock_file: Annotated[Path, typer.Argument(exists=True, dir_okay=False, readable=True)],
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Verify a relational split lock and every leakage prohibition."""
+
+    try:
+        plan = verify_relational_split_lock(lock_file)
+        _emit(
+            {
+                "valid": True,
+                "assignments": len(plan.assignments),
+                "split_hash": plan.split_hash,
+            },
+            json_output,
+        )
+    except (G2LCError, ValidationError, OSError) as exc:
+        _fail(exc)
+
+
+@data_app.command("access-plan")
+def data_access_plan(
+    registry_path: Annotated[
+        Path, typer.Option("--registry", exists=True, dir_okay=False, readable=True)
+    ] = Path("data/dataset_registry.yaml"),
+    json_output: Annotated[bool, typer.Option("--json")] = False,
+) -> None:
+    """Print public owner actions without performing access steps."""
+
+    try:
+        _emit({"actions": access_plan(load_dataset_registry(registry_path))}, json_output)
     except (G2LCError, ValidationError, OSError) as exc:
         _fail(exc)
 

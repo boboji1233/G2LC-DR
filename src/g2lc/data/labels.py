@@ -13,6 +13,5 @@ def normalize_label(value: str | None) -> EvidenceLabel:
     try:
         return EvidenceLabel(value.strip().upper())
     except ValueError as exc:
-        raise ValueError(
-            f"invalid label state {value!r}; expected POSITIVE, NEGATIVE, or UNKNOWN"
-        ) from exc
+        expected = ", ".join(item.value for item in EvidenceLabel)
+        raise ValueError(f"invalid label state {value!r}; expected one of {expected}") from exc

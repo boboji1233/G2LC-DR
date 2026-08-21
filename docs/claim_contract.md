@@ -41,5 +41,7 @@ declared evidence language, synthetic rules, costs, or modalities are clinically
 complete, and it does not establish visual learnability.
 
 A local Stage-1.6 `PASS` means the recorded synthetic software checks passed for the
-bound commit. It is not a clinical result, does not authorize Stage 2, and does not imply
-merge readiness until GitHub Actions and human review are independently green.
+bound commit. It is not a clinical result and, by itself, does not authorize later work.
+The separately authorized Stage 2A scope covers metadata governance and Oracle-input
+readiness only; it still makes no clinical, dataset-availability, Oracle, or performance
+claim. GitHub Actions and human review remain independent merge conditions.

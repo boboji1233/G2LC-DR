@@ -30,6 +30,11 @@ Thumbs.db
 data/raw/**
 data/interim/**
 data/processed/**
+data/manifests/**
+data/metadata/local/**
+data/checksums/local/**
+data/licenses/private/**
+data/review/**
 !data/raw/.gitkeep
 !data/interim/.gitkeep
 !data/processed/.gitkeep

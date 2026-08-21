@@ -131,20 +131,50 @@ logs remain unchanged on disk; the ZIP manifest hashes the normalized exported c
 
 ## 7. Add a dataset adapter
 
-Dataset adapters begin only after Stage 1 acceptance. Require a local path, check the
-expected structure, preserve original labels and provenance, convert absent labels to
-`UNKNOWN`, hash files, record license/source family, and support a dry run. Never fetch
-gated data. DDR/MMRDR-CFP must be `OIA_DDR`; Retinal-Lesions is an EyePACS overlap risk.
+Stage 2A adapters require a local path, check only verified structure, preserve source
+provenance and missingness, and support a no-write dry run. They never fetch data or infer
+clinical values from filenames. DDR/MMRDR-CFP must be `OIA_DDR`; MESSIDOR/MAPLES must be
+`MESSIDOR1`; Retinal-Lesions is an EyePACS overlap risk.
 
 ```bash
-uv run g2lc data adapt idrid D:/legal/local/IDRiD data/manifests/idrid.parquet --dry-run
-uv run g2lc data adapt idrid D:/legal/local/IDRiD data/manifests/idrid.parquet \
+uv run g2lc data status --json
+uv run g2lc data access-plan --json
+uv run g2lc data inspect-root idrid /legal/local/IDRiD --license-confirmed --json
+uv run g2lc data build-manifest idrid /legal/local/IDRiD data/manifests/idrid \
+  --dry-run --license-confirmed --json
+uv run g2lc data build-manifest idrid /legal/local/IDRiD data/manifests/idrid \
   --license-confirmed
+uv run g2lc data validate-manifest data/manifests/idrid --json
+uv run g2lc data audit-duplicates data/manifests/idrid data/review/idrid --json
+uv run g2lc data create-split data/manifests/idrid data/manifests/idrid.split.lock.json \
+  --dry-run --json
+uv run g2lc data create-split data/manifests/idrid data/manifests/idrid.split.lock.json
+uv run g2lc data verify-split-lock data/manifests/idrid.split.lock.json --json
 ```
 
-The initial adapters intentionally emit `UNKNOWN` clinical labels until each official
-source table parser is verified against legally supplied files. They never infer labels
-from filenames. That source-specific parsing remains blocked when the dataset is absent.
+`build-manifest` currently inventories images into relational metadata while parsing zero
+clinical labels. Source-specific parsers remain blocked until legally supplied official
+files make their exact tables testable. A dry run writes nothing. Duplicate auditing
+creates JSON/CSV/HTML review artifacts but deletes no source file.
+
+## 7a. Run the Stage 2A gate
+
+Capture the immutable Stage 1.6 baseline as in section 4a, commit all intended tracked
+Stage 2A sources, and run both required interpreters:
+
+```bash
+uv run --python 3.11 python scripts/stage2a_gate.py
+uv run --python 3.12 python scripts/stage2a_gate.py
+uv run --python 3.12 g2lc audit stage2a --required-pythons 3.11,3.12 \
+  --output artifacts/audit/stage2a/gate.json --json
+```
+
+The runner executes Stage 1.6.1 first, then locked sync, ruff, format check, strict mypy,
+branch-aware full pytest, focused schema/migration/adapter/unknown/source-family/MAPLES/
+duplicate/CLI tests, tracked-tree forbidden-content scan, isolated build, package audit,
+and a commit-bound Stage 2A review bundle. Every subprocess exit code is recorded under
+`artifacts/audit/stage2a/`; the final ZIP, sibling checksum, and final metadata are joint
+checksum authority.
 
 ## 8. Run the Oracle protocol
 
