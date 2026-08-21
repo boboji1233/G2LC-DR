@@ -257,8 +257,15 @@ def _metadata(
     }
 
 
+def _verification_basetemp(run_id: str) -> Path:
+    return ROOT.parent / ".review-pytest" / run_id
+
+
 def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str) -> dict[str, Any]:
-    destination = ROOT / ".review-verify" / uuid.uuid4().hex
+    run_id = uuid.uuid4().hex
+    destination = ROOT / ".review-verify" / run_id
+    basetemp = _verification_basetemp(run_id)
+    basetemp.parent.mkdir(parents=True, exist_ok=True)
     destination.mkdir(parents=True, exist_ok=False)
     with zipfile.ZipFile(archive) as bundle:
         bundle.extractall(destination)
@@ -285,6 +292,8 @@ def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str)
             "-m",
             "pytest",
             "-q",
+            "--basetemp",
+            str(basetemp),
             "tests/stage1_6/test_cross_path_regressions.py",
         ],
         cwd=destination,
@@ -302,6 +311,7 @@ def _verify_archive(archive: Path, expected: dict[str, str], metadata_name: str)
         "recursive_checksum_externalized": recursive_checksum_externalized,
         "embedded_checksum_authority": metadata["archive_checksum"]["authority"],
         "verification_workspace": "<WORKSPACE>/.review-verify/<RUN_ID>",
+        "pytest_basetemp": "<WORKSPACE_PARENT>/.review-pytest/<RUN_ID>",
     }
 
 
