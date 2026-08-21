@@ -78,6 +78,38 @@ verification. It never inserts a synthetic successful exit code for its own audi
 The enforced coverage floors are 92%/86% whole-project line/branch and 96%/91% core
 line/branch. The weekly/manual CI stress job expands the semantic generator to 2,000 cases.
 
+## 4b. Stage-1.6.1 packaging and review finalization
+
+`stage1_6_gate.py` builds into a unique ignored directory rather than repository `dist/`,
+then runs `scripts/package_audit.py`. The audit requires exactly one wheel and one sdist,
+wheel <2 MiB, sdist <5 MiB, no virtual environments/caches/generated outputs/medical data/
+logs/checkpoints/secrets/local absolute paths, and clean isolated installed-CLI smoke tests
+for both archives. `g2lc version` must report `0.1.0`; `g2lc synthetic run --fixture
+minimal_dr --json` must pass using the fixture packaged in the wheel/sdist.
+
+Run the two Python environments, aggregate them, then finalize the review archive:
+
+```bash
+uv run --python 3.11 python scripts/stage1_6_gate.py
+uv run --python 3.12 python scripts/stage1_6_gate.py
+uv run --python 3.12 g2lc audit stage1-6 --required-pythons 3.11,3.12 \
+  --output artifacts/audit/stage1_6/gate.json
+uv run --python 3.12 python scripts/review_bundle.py --stage 1.6.1 --finalize
+uv run --python 3.12 g2lc audit stage1-6 --required-pythons 3.11,3.12 \
+  --output artifacts/audit/stage1_6/gate.json
+```
+
+The ZIP's embedded gate deliberately stores `EXTERNALIZED` instead of a recursive archive
+hash. Verify the final ZIP against both sibling files:
+
+```text
+G2LC_DR_STAGE1_6_1_REVIEW_<commit>.sha256
+G2LC_DR_STAGE1_6_1_REVIEW_<commit>_final_metadata.json
+```
+
+The review export replaces local roots with `<WORKSPACE>` or `<LOCAL_PATH>`. Raw audit
+logs remain unchanged on disk; the ZIP manifest hashes the normalized exported copies.
+
 ## 5. Add a guideline safely
 
 1. Create a versioned YAML file; include official URL, section, effective date, modality,
