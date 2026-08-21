@@ -2,8 +2,9 @@
 
 Last updated: 2026-08-21 (Asia/Shanghai)
 
-Stage 1.6 cross-path hardening is implemented locally; its commit-bound dual-Python
-gate is the only authoritative acceptance record.
+Stage 1.6 cross-path hardening is semantically frozen. Stage 1.6.1 adds packaging and
+audit-finalization hygiene without changing guideline, solver, repair, certificate, or
+independent-verifier semantics; its commit-bound dual-Python gate is authoritative.
 Stage 2, Oracle, and visual training remain frozen.
 
 ## Current Stage 1.6 scope
@@ -24,6 +25,13 @@ Stage 2, Oracle, and visual training remain frozen.
 - Python 3.11/3.12 commands, coverage against 92/86 whole-project and 96/91 core
   line/branch floors, 200-case semantic results, tamper results, and bundle verification
   are reported only from `artifacts/audit/stage1_6/gate.json`.
+- Stage 1.6.1 uses an explicit Hatch sdist allowlist, audits wheel/sdist contents and
+  size, clean-installs both archives, and runs the installed CLI/version/minimal fixture.
+  Build outputs are isolated under ignored audit paths, so repeated builds cannot ingest
+  prior `dist/`, virtual environments, audit bundles, logs, or medical-data directories.
+- A review archive embeds `EXTERNALIZED` for its impossible self-checksum. Its sibling
+  `.sha256` and `_final_metadata.json` are the joint checksum authority; archive-only
+  path normalization leaves raw command evidence unchanged on disk.
 
 ## Current Stage 1.5 audit
 
@@ -65,8 +73,8 @@ feasibility, derivation, modality, and guideline semantics.
 
 ## Next dependency-satisfied tasks
 
-1. Review `artifacts/audit/stage1_6/gate.json`, the 12-character commit-addressed bundle,
-   and `OWNER_ACTIONS_AFTER_STAGE1_6.md`.
+1. Review `artifacts/audit/stage1_6/gate.json`, the Stage-1.6.1 commit-addressed bundle,
+   its external checksum/final metadata, and `OWNER_ACTIONS_AFTER_STAGE1_6.md`.
 2. Keep all Stage 2, real-data parsing, Oracle, and visual-model work frozen until a
    separately authorized task satisfies its own data, provenance, and scientific gates.
 
