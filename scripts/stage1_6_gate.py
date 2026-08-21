@@ -73,6 +73,8 @@ def main() -> int:
         "commands": [],
     }
     run = [uv, "run", "--python", sys.executable]
+    package_directory = ENVIRONMENT / "packages" / f"run_{time.time_ns()}"
+    package_audit_path = ENVIRONMENT / "package_audit.json"
     required = [
         item.strip() for item in os.environ.get("G2LC_REQUIRED_PYTHONS", VERSION).split(",")
     ]
@@ -99,7 +101,33 @@ def main() -> int:
                 "--cov-fail-under=92",
             ],
         ),
-        ("uv build", [uv, "build", "--python", sys.executable]),
+        (
+            "uv build --out-dir <isolated-package-dir>",
+            [
+                uv,
+                "build",
+                "--python",
+                sys.executable,
+                "--out-dir",
+                str(package_directory),
+            ],
+        ),
+        (
+            "uv run python scripts/package_audit.py --artifact-dir <isolated-package-dir>",
+            [
+                *run,
+                "python",
+                "scripts/package_audit.py",
+                "--artifact-dir",
+                str(package_directory),
+                "--output",
+                str(package_audit_path),
+                "--uv",
+                uv,
+                "--python",
+                sys.executable,
+            ],
+        ),
         (
             "uv run g2lc synthetic matrix --random-seeds 20 --semantic-generated-cases 200",
             [
@@ -132,13 +160,13 @@ def main() -> int:
         _record(payload, uv, index, display, arguments)
     gate_path = AUDIT / "gate.json"
     generate_gate(gate_path, required)
-    review_arguments = [*run, "python", "scripts/review_bundle.py", "--stage", "1.6"]
+    review_arguments = [*run, "python", "scripts/review_bundle.py", "--stage", "1.6.1"]
     finalize_arguments = [*review_arguments, "--finalize"]
     _record(
         payload,
         uv,
         len(plan) + 1,
-        "uv run python scripts/review_bundle.py --stage 1.6",
+        "uv run python scripts/review_bundle.py --stage 1.6.1",
         review_arguments,
     )
     generate_gate(gate_path, required)
@@ -146,19 +174,10 @@ def main() -> int:
         payload,
         uv,
         len(plan) + 2,
-        "uv run python scripts/review_bundle.py --stage 1.6 --finalize",
+        "uv run python scripts/review_bundle.py --stage 1.6.1 --finalize",
         finalize_arguments,
     )
     gate = generate_gate(gate_path, required)
-    if gate["final_status"] == "PASS":
-        _record(
-            payload,
-            uv,
-            len(plan) + 3,
-            "uv run python scripts/review_bundle.py --stage 1.6 --finalize (PASS refresh)",
-            finalize_arguments,
-        )
-        gate = generate_gate(gate_path, required)
     return 0 if gate["final_status"] == "PASS" else 1
 
 
