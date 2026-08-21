@@ -51,9 +51,13 @@ def test_status_joins_explicit_root_map_and_confirmations(tmp_path: Path) -> Non
 def test_invalid_root_mapping_fails_closed(tmp_path: Path) -> None:
     roots = tmp_path / "roots.yaml"
     roots.write_text("roots: [not, a, mapping]\n", encoding="utf-8")
-    result = runner.invoke(app, ["data", "status", "--roots", str(roots)])
+    result = runner.invoke(
+        app,
+        ["data", "status", "--roots", str(roots)],
+        terminal_width=40,
+    )
     assert result.exit_code == 2
-    assert "dataset_id: local_path" in result.stderr
+    assert "dataset_id: local_path" in " ".join(result.stderr.split())
 
 
 def test_inspect_build_validate_split_and_verify_commands(tmp_path: Path) -> None:
