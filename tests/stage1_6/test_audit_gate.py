@@ -160,6 +160,17 @@ def test_gate_aggregates_only_recorded_evidence(tmp_path: Path, monkeypatch) -> 
             }
         },
     )
+    _write_json(
+        environment / "package_audit.json",
+        {
+            "passed": True,
+            "archives": [
+                {"kind": "wheel", "members": ["g2lc/__init__.py"]},
+                {"kind": "sdist", "members": ["g2lc_dr-0.1.0/pyproject.toml"]},
+            ],
+            "clean_install_smoke": [{"passed": True}, {"passed": True}],
+        },
+    )
     (environment / "junit.xml").write_text(
         '<testsuite><testcase name="test_greedy_recorded"/></testsuite>', encoding="utf-8"
     )
@@ -186,15 +197,26 @@ def test_gate_aggregates_only_recorded_evidence(tmp_path: Path, monkeypatch) -> 
         tmp_path
         / "artifacts"
         / "review"
-        / f"G2LC_DR_STAGE1_6_REVIEW_{commit[:12]}_verification.json",
-        {"passed": True, "embedded_commit": commit},
+        / f"G2LC_DR_STAGE1_6_1_REVIEW_{commit[:12]}_verification.json",
+        {
+            "passed": True,
+            "embedded_commit": commit,
+            "recursive_checksum_externalized": True,
+        },
     )
-    archive = tmp_path / "artifacts" / "review" / f"G2LC_DR_STAGE1_6_REVIEW_{commit[:12]}.zip"
+    archive = tmp_path / "artifacts" / "review" / f"G2LC_DR_STAGE1_6_1_REVIEW_{commit[:12]}.zip"
     archive.write_bytes(b"verified-review-bundle")
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
     (
-        tmp_path / "artifacts" / "review" / f"G2LC_DR_STAGE1_6_REVIEW_{commit[:12]}.sha256"
+        tmp_path / "artifacts" / "review" / f"G2LC_DR_STAGE1_6_1_REVIEW_{commit[:12]}.sha256"
     ).write_text(f"{digest}  {archive.name}\n", encoding="utf-8")
+    _write_json(
+        tmp_path
+        / "artifacts"
+        / "review"
+        / f"G2LC_DR_STAGE1_6_1_REVIEW_{commit[:12]}_final_metadata.json",
+        {"archive": {"sha256": digest}},
+    )
     monkeypatch.setattr(audit, "ROOT", tmp_path)
 
     def fake_git(*arguments: str) -> str:
@@ -215,6 +237,7 @@ def test_gate_aggregates_only_recorded_evidence(tmp_path: Path, monkeypatch) -> 
     result = generate_gate(audit_root / "gate.json", [version])
 
     assert result["final_status"] == "PASS"
+    assert result["stage"] == "1.6.1"
     assert result["gate_generation"]["self_assumed_exit_code"] is False
     assert result["failure_count"] == 0
     assert result["commands"]
