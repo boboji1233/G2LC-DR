@@ -55,10 +55,11 @@ MANDATORY_COMMAND_MARKERS = (
     "uv run mypy src tests",
     "uv run pytest -q --cov-branch --cov=g2lc --cov=g2lc_verifier",
     "uv build",
+    "uv run python scripts/package_audit.py --artifact-dir",
     "uv run g2lc synthetic matrix --random-seeds 20 --semantic-generated-cases 200",
     "uv run g2lc audit stage1-6 --output artifacts/audit/stage1_6/gate.json",
-    "uv run python scripts/review_bundle.py --stage 1.6",
-    "uv run python scripts/review_bundle.py --stage 1.6 --finalize",
+    "uv run python scripts/review_bundle.py --stage 1.6.1",
+    "uv run python scripts/review_bundle.py --stage 1.6.1 --finalize",
 )
 
 
@@ -552,6 +553,13 @@ def _junit_summary(path: Path) -> tuple[int, int, dict[str, bool]]:
     return len(cases), failures, outcomes
 
 
+def _exit_code_for(exit_codes: dict[str, int], prefix: str) -> int | None:
+    return next(
+        (value for command, value in exit_codes.items() if command.startswith(prefix)),
+        None,
+    )
+
+
 def generate_gate(output: str | Path, required_pythons: list[str] | None = None) -> dict[str, Any]:
     """Generate Stage-1.6 evidence without inventing a successful self-audit command."""
 
@@ -584,6 +592,7 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         )
         test_count, failed_tests, test_outcomes = _junit_summary(directory / "junit.xml")
         exit_codes = {item["command"]: item["exit_code"] for item in commands["commands"]}
+
         missing_commands = [
             marker
             for marker in MANDATORY_COMMAND_MARKERS
@@ -599,6 +608,12 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             and branch >= COVERAGE_THRESHOLDS["whole_branch"]
             and core_line >= COVERAGE_THRESHOLDS["core_line"]
             and core_branch >= COVERAGE_THRESHOLDS["core_branch"]
+        )
+        package_audit_path = directory / "package_audit.json"
+        package_audit = (
+            json.loads(package_audit_path.read_text(encoding="utf-8"))
+            if package_audit_path.is_file()
+            else {"passed": False, "reason": "package audit not generated"}
         )
         environment_results[version] = {
             "python_version": commands.get("python_version"),
@@ -637,19 +652,21 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
                     )
                 )
             },
-            "passed": command_pass and failed_tests == 0 and test_count > 0 and coverage_pass,
+            "passed": command_pass
+            and failed_tests == 0
+            and test_count > 0
+            and coverage_pass
+            and bool(package_audit.get("passed")),
             "package_build_result": {
-                "passed": exit_codes.get("uv build") == 0,
-                "exit_code": exit_codes.get("uv build"),
-                "artifacts": [
-                    {
-                        "path": path.relative_to(ROOT).as_posix(),
-                        "sha256": sha256_file(path),
-                        "size": path.stat().st_size,
-                    }
-                    for path in sorted((ROOT / "dist").glob("*"))
-                    if path.is_file()
-                ],
+                "passed": _exit_code_for(exit_codes, "uv build") == 0
+                and _exit_code_for(exit_codes, "uv run python scripts/package_audit.py") == 0
+                and bool(package_audit.get("passed")),
+                "build_exit_code": _exit_code_for(exit_codes, "uv build"),
+                "audit_exit_code": _exit_code_for(
+                    exit_codes, "uv run python scripts/package_audit.py"
+                ),
+                "artifacts": package_audit.get("archives", []),
+                "clean_install_smoke": package_audit.get("clean_install_smoke", []),
             },
         }
     matrix_path = audit / "solver_matrix.json"
@@ -665,6 +682,22 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             "tamper_matrix_results",
         )
     ) and bool(semantic.get("passed"))
+
+    package_member_sets: dict[str, dict[str, list[str]]] = {}
+    for version, result in environment_results.items():
+        package_member_sets[version] = {
+            archive["kind"]: archive.get("members", [])
+            for archive in result["package_build_result"].get("artifacts", [])
+        }
+    reproducible_kinds: dict[str, bool] = {}
+    for kind in ("wheel", "sdist"):
+        values = [package_member_sets.get(version, {}).get(kind) for version in required]
+        reproducible_kinds[kind] = bool(values) and all(value == values[0] for value in values)
+    package_reproducibility = {
+        "member_sets_by_python": package_member_sets,
+        "same_members_across_required_pythons": reproducible_kinds,
+        "passed": all(reproducible_kinds.values()),
+    }
 
     def focused_pass(marker: str) -> bool:
         outcomes = [
@@ -692,7 +725,7 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
     short_commit = _git_value("rev-parse", "--short=12", "HEAD")
     verification_files = sorted(
         (ROOT / "artifacts" / "review").glob(
-            f"G2LC_DR_STAGE1_6_REVIEW_{short_commit}_verification.json"
+            f"G2LC_DR_STAGE1_6_1_REVIEW_{short_commit}_verification.json"
         )
     )
     bundle_verification = (
@@ -701,10 +734,15 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         else {"passed": False, "reason": "review bundle not generated yet"}
     )
     archive_files = sorted(
-        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{short_commit}.zip")
+        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_1_REVIEW_{short_commit}.zip")
     )
     checksum_files = sorted(
-        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_REVIEW_{short_commit}.sha256")
+        (ROOT / "artifacts" / "review").glob(f"G2LC_DR_STAGE1_6_1_REVIEW_{short_commit}.sha256")
+    )
+    final_metadata_files = sorted(
+        (ROOT / "artifacts" / "review").glob(
+            f"G2LC_DR_STAGE1_6_1_REVIEW_{short_commit}_final_metadata.json"
+        )
     )
     bundle_artifact = (
         {
@@ -717,6 +755,15 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
             "checksum_matches": bool(checksum_files)
             and checksum_files[-1].read_text(encoding="utf-8").split()[0]
             == sha256_file(archive_files[-1]),
+            "final_metadata_path": final_metadata_files[-1].relative_to(ROOT).as_posix()
+            if final_metadata_files
+            else None,
+            "final_metadata_matches": bool(final_metadata_files)
+            and json.loads(final_metadata_files[-1].read_text(encoding="utf-8"))
+            .get("archive", {})
+            .get("sha256")
+            == sha256_file(archive_files[-1]),
+            "checksum_authority": "external_sha256_and_final_metadata",
         }
         if archive_files
         else None
@@ -735,11 +782,14 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         "PASS"
         if all(environment_results.get(item, {}).get("passed") for item in required)
         and matrix_pass
+        and package_reproducibility["passed"]
         and regressions_before is not None
         and bundle_verification.get("passed")
         and bundle_verification.get("embedded_commit") == commit
         and bundle_artifact is not None
         and bundle_artifact.get("checksum_matches")
+        and bundle_artifact.get("final_metadata_matches")
+        and bundle_verification.get("recursive_checksum_externalized")
         else "FAIL"
     )
     flat_commands = [
@@ -765,8 +815,9 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
     ci_head_sha = os.environ.get("GITHUB_HEAD_SHA")
     ci_merge_sha = os.environ.get("GITHUB_SHA") if github_ref.startswith("refs/pull/") else None
     payload = {
-        "schema_version": "1.0",
-        "stage": "1.6",
+        "schema_version": "1.1",
+        "stage": "1.6.1",
+        "stage1_6_semantics_frozen": True,
         "semantic_contract": "action-only-decision-sufficiency-v1.1",
         "starting_commit": "ec3250d7e3dba0379c3b5205949c23e4f4ee5d59",
         "git_commit": commit,
@@ -847,6 +898,7 @@ def generate_gate(output: str | Path, required_pythons: list[str] | None = None)
         "package_build_results": {
             version: item["package_build_result"] for version, item in environment_results.items()
         },
+        "package_reproducibility": package_reproducibility,
         "tamper_results": matrix.get("tamper_matrix_results"),
         "verifier_independence": matrix.get("verifier_independence_check"),
         "review_bundle_verification": bundle_verification,
