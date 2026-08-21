@@ -38,7 +38,7 @@ jobs:
           name: stage1-6-audit-py${{ matrix.python-version }}
           path: |
             artifacts/audit/stage1_6/
-            artifacts/review/G2LC_DR_STAGE1_6_REVIEW_*
+            artifacts/review/G2LC_DR_STAGE1_6_1_REVIEW_*
 
   semantic-stress:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
