@@ -37,4 +37,4 @@ stage1-6-gate:
 	$(UV) run python scripts/stage1_6_gate.py
 
 review-bundle:
-	$(UV) run python scripts/review_bundle.py --stage 1.6
+	$(UV) run python scripts/review_bundle.py --stage 1.6.1 --finalize
