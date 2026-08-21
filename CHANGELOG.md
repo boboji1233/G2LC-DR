@@ -5,6 +5,23 @@ made any clinical-validation or experiment-result claim.
 
 ## [Unreleased]
 
+### Stage 1.6.1 packaging hygiene
+
+- Replaced implicit sdist discovery with an explicit Hatch include/exclude policy and
+  broadened local ignores to cover `.venv*`, build caches, logs, checkpoints, review
+  bundles, generated outputs, and raw/interim/processed medical-data roots.
+- Added wheel (<2 MiB) and sdist (<5 MiB) content audits, forbidden-member/secret/local-
+  path scans, clean isolated installs of both archives, installed-version checks, and an
+  installed minimal synthetic CLI smoke test.
+- Isolated every build in a run-specific ignored audit directory and compare archive
+  member sets across Python 3.11 and 3.12, preventing recursive inclusion of earlier
+  `dist/` or build outputs.
+- Externalized the review archive's recursive SHA-256: embedded gates say
+  `EXTERNALIZED`, while the sibling `.sha256` and `_final_metadata.json` carry the final
+  authoritative digest. Review exports normalize local paths without mutating raw logs.
+- Stage 1.6 decision, feasibility, derivation, objective, repair, certificate, and
+  independent-verifier semantics remain unchanged; Stage 2 remains frozen.
+
 ### Stage 1.6 cross-path hardening
 
 - Fixed Python 3.12 mypy targeting by allowing the active interpreter to select syntax.
