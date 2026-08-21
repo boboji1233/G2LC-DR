@@ -139,3 +139,16 @@ The gate requires whole-project line/branch coverage of at least 92%/86% and cor
 line/branch coverage of at least 96%/91%, plus 200 generated semantic problems. It
 records actual subprocess exit codes and durations and verifies a commit-bound,
 privacy-safe archive named with the first 12 hexadecimal commit characters.
+
+## Stage 1.6.1 packaging hygiene acceptance
+
+Stage 1.6.1 leaves all Stage 1.6 semantics frozen and adds an explicit sdist policy,
+run-isolated builds, package size/content/clean-install smoke gates, portable review
+exports, and externalized archive checksum finalization. It requires wheel <2 MiB, sdist
+<5 MiB, no forbidden archive members or local absolute paths, clean installed CLI smoke
+tests for both archive types, and matching member sets across the two required Python
+environments. The archive cannot contain its own digest: the embedded gate uses
+`EXTERNALIZED`, and the external `.sha256` plus `_final_metadata.json` are authoritative.
+
+Stage 2, Oracle, real-data parsing, and visual training remain frozen until a separately
+authorized task begins.
