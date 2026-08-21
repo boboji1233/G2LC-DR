@@ -4,7 +4,7 @@ Date: 2026-08-21
 
 Baseline: `ec3250d7e3dba0379c3b5205949c23e4f4ee5d59`
 
-Scope: synthetic compiler semantics only
+Scope: synthetic compiler semantics plus Stage 1.6.1 packaging/audit finalization
 
 ## Reproduction
 
@@ -32,6 +32,22 @@ probe exits 1 only when all expected defects are observed. Exact output is retai
   mutations are independently rejected.
 
 ## Acceptance and limitations
+
+### Stage 1.6.1 packaging follow-up
+
+The Stage-1.6 sdist was reported as 156,588,124 bytes while the wheel was 96,343 bytes.
+The exact mechanism was reproduced on starting commit
+`640804c57d2f9508979e5838b2e3ab7f9ab5f0bd`: `.gitignore` matched only `.venv/`, and no
+Hatch sdist include/exclude policy existed, so a controlled file under `.venv311/`
+appeared as `g2lc_dr-0.1.0/.venv311/STAGE1_6_1_BLOAT_MARKER.txt`. The original dual
+environment directories `.venv311` and `.venv312` therefore supplied the 156 MB payload;
+the source and wheel were not the cause.
+
+Stage 1.6.1 adds an explicit allowlist/exclusion policy, run-isolated builds, archive
+content and clean-install audits, and a non-recursive review-bundle protocol. An embedded
+gate can never contain the final hash of the ZIP containing it, so it records
+`EXTERNALIZED`; the sibling `.sha256` and `_final_metadata.json` are authoritative.
+Archive-only `<WORKSPACE>` normalization does not rewrite raw command logs.
 
 The final command results, Python 3.11/3.12 coverage against 92/86 whole-project and
 96/91 core line/branch floors, 200-case semantic matrix, build,
