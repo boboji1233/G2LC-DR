@@ -28,6 +28,10 @@ _normalize_json = cast(
     Callable[[Any], Any],
     _REVIEW_BUNDLE["_normalize_json"],
 )
+_verification_basetemp = cast(
+    Callable[[str], Path],
+    _REVIEW_BUNDLE["_verification_basetemp"],
+)
 
 
 def _write_wheel(path: Path, members: dict[str, bytes]) -> None:
@@ -146,3 +150,11 @@ def test_json_path_normalization_preserves_nested_json_syntax() -> None:
     assert json.loads(serialized) == normalized
     assert "C:\\\\Users" not in serialized
     assert "<LOCAL_PATH>" in serialized
+
+
+def test_review_verification_uses_short_external_pytest_root() -> None:
+    run_id = "0" * 32
+    basetemp = _verification_basetemp(run_id)
+
+    assert basetemp == Path.cwd().parent / ".review-pytest" / run_id
+    assert len(str(basetemp)) < len(str(Path.cwd() / ".review-verify" / run_id))
