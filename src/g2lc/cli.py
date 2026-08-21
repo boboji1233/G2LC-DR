@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal
+from importlib.resources import as_file, files
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -11,6 +12,7 @@ import typer
 from pydantic import ValidationError
 from rich.console import Console
 
+from g2lc import __version__
 from g2lc.audit.stage1_5 import generate_gate as generate_stage1_5_gate
 from g2lc.audit.stage1_5 import run_synthetic_matrix
 from g2lc.audit.stage1_6 import generate_gate as generate_stage1_6_gate
@@ -73,6 +75,13 @@ def _emit(value: Any, json_output: bool) -> None:
 def _fail(exc: Exception) -> None:
     error_console.print(f"[red]ERROR[/red] {exc}")
     raise typer.Exit(code=2)
+
+
+@app.command("version")
+def version_command() -> None:
+    """Print the installed G2LC-DR package version."""
+
+    typer.echo(__version__)
 
 
 @ontology_app.command("validate")
@@ -251,8 +260,13 @@ def synthetic_run(
     allowed = {"minimal_dr", "missing_evidence", "out_of_spec"}
     if fixture not in allowed:
         _fail(ValueError(f"unknown fixture {fixture!r}; choose one of {sorted(allowed)}"))
-    project = Path("examples") / "synthetic" / fixture / "project.yaml"
-    compile_command(project, solver, None, json_output)
+    checkout_project = Path("examples") / "synthetic" / fixture / "project.yaml"
+    if checkout_project.is_file():
+        compile_command(checkout_project, solver, None, json_output)
+        return
+    packaged_project = files("g2lc").joinpath("fixtures", "synthetic", fixture, "project.yaml")
+    with as_file(packaged_project) as project:
+        compile_command(project, solver, None, json_output)
 
 
 @synthetic_app.command("matrix")
